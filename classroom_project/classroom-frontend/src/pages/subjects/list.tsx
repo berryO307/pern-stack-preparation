@@ -16,6 +16,7 @@ import { DEPARTMENT_OPTIONS, DEPARTMENTS } from "@/constants";
 import { CreateButton } from "@/components/refine-ui/buttons/create.tsx";
 import { DataTable } from "@/components/refine-ui/data-table/data-table.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
+import { type subject } from "@/types";
 
 const SubjectsList = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -35,8 +36,8 @@ const SubjectsList = () => {
     ? [{ field: "name", operator: "contains" as const, value: searchQuery }]
     : [];
 
-  const SubjectTable = useTable<Subject>({
-    columns: useMemo<ColumnDef<Subject>[]>(
+  const SubjectTable = useTable<subject>({
+    columns: useMemo<ColumnDef<subject>[]>(
       () => [
         {
           id: "code",
@@ -55,7 +56,7 @@ const SubjectsList = () => {
           ),
         },
         {
-          id: "description",
+          id: "department",
           accessorKey: "department",
           size: 150,
           header: () => <p className="column-title">Department</p>,
