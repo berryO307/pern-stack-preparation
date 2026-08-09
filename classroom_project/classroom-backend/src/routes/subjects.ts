@@ -9,8 +9,8 @@ router.get("/", async (req, res) => {
     try {
         const { search, department, page = 1, limit = 10 } = req.query;
 
-        const currentPage = Math.max(1, +page);
-        const limitPerPage = Math.max(1, +limit);
+        const currentPage = Math.max(1, parseInt(String(page), 10) || 1);
+        const limitPerPage = Math.min(Math.max(1, parseInt(String(limit), 10) || 10), 100);
         const offset = (currentPage - 1) * limitPerPage;
         const filterConditions = [];
         // If search query exists, filter by subject name OR subject code
@@ -24,7 +24,8 @@ router.get("/", async (req, res) => {
         }
         // If department filter exists, match department name
         if (department) {
-            filterConditions.push(ilike(departments.name, `%${department}`));
+            const deptPattern = `%${String(department).replace(/[%_]/g, '\\$&')}%`;
+            filterConditions.push(ilike(departments.name, deptPattern));
         }
         // Combine all filters using AND if any exist
         const whereClause = filterConditions.length > 0 ? and(...filterConditions) : undefined;
@@ -39,8 +40,8 @@ router.get("/", async (req, res) => {
             ...getTableColumns(subjects),
             department: { ...getTableColumns(departments)}
         }).from(subjects).leftJoin(departments, eq(subjects.departmentId, departments.id))
-            .where(whereClause).
-            orderBy(desc(subjects.createdAt))
+            .where(whereClause)
+            .orderBy(desc(subjects.createdAt))
             .limit(limitPerPage)
             .offset(offset);
 
