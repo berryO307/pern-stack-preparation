@@ -1,5 +1,5 @@
-import {index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, varchar} from "drizzle-orm/pg-core";
-import {relations} from "drizzle-orm";
+import {check, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, varchar} from "drizzle-orm/pg-core";
+import {relations, sql} from "drizzle-orm";
 import {user} from "./auth";
 
 const timestamps = {
@@ -47,7 +47,8 @@ export const classes = pgTable('classes', {
     ...timestamps
 }, (table) => [
     index('classes_subject_id_idx').on(table.subjectId),
-    index('classes_teacher_id_idx').on(table.teacherId)
+    index('classes_teacher_id_idx').on(table.teacherId),
+    check('classes_capacity_non_negative', sql`${table.capacity} >= 0`)
 ]);
 
 export const enrollments = pgTable('enrollments', {
