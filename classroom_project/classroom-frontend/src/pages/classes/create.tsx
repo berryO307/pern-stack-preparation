@@ -1,7 +1,7 @@
 import { CreateView } from "@/components/refine-ui/views/create-view.tsx";
 import { Breadcrumb } from "@/components/refine-ui/layout/breadcrumb.tsx";
 import { Button } from "@/components/ui/button.tsx";
-import { useBack } from "@refinedev/core";
+import { useBack, useList } from "@refinedev/core";
 import { Separator } from "@/components/ui/separator.tsx";
 import {
   Card,
@@ -34,7 +34,9 @@ import {
 import { Textarea } from "@/components/ui/textarea.tsx";
 import { Loader2 } from "lucide-react";
 import UploadWidget from "@/components/upload-widget.tsx";
-import type { UploadWidgetValue } from "@/types";
+import type { Subject, UploadWidgetValue, User } from "@/types";
+import { subjects, teachers } from "@/constants";
+import { use } from "react";
 
 const Create = () => {
   const back = useBack();
@@ -54,6 +56,8 @@ const Create = () => {
     refineCore: { onFinish, formLoading },
   } = form;
 
+  const bannerPublicId = form.watch("bannerCldPubId");
+
   const onSubmit = async (values: z.infer<typeof classSchema>) => {
     try {
       await onFinish(values);
@@ -62,31 +66,27 @@ const Create = () => {
     }
   };
 
-  const teachers = [
-    {
-      id: 1,
-      name: "John Doe",
+  const { query: subjectsQuery } = useList<Subject>({
+    resource: "subjects",
+    pagination: {
+      pageSize: 100,
     },
-    {
-      id: 2,
-      name: "Jane Doe",
-    },
-  ];
+  });
 
-  const subjects = [
-    {
-      id: 1,
-      name: "Math",
-      code: "MATH",
+  const { query: teachersQuery } = useList<User>({
+    resource: "users",
+    filters: [{ field: "role", operator: "eq", value: "teacher" }],
+    pagination: {
+      pageSize: 100,
     },
-    {
-      id: 2,
-      name: "English",
-      code: "ENG",
-    },
-  ];
+  });
 
-  const bannerPublicId = form.watch("bannerCldPubId");
+  const subjects = subjectsQuery?.data?.data || [];
+  const teachers = teachersQuery?.data?.data || [];
+
+  const subjectsLoading = subjectsQuery.isLoading;
+  const teacherLoading = teachersQuery.isLoading;
+
   const setBannerImage = (
     file: UploadWidgetValue | null,
     onBannerUrlChange: (url: string) => void,
@@ -197,6 +197,7 @@ const Create = () => {
                             field.onChange(Number(value))
                           }
                           value={field.value?.toString()}
+                          disabled={subjectsLoading}
                         >
                           <FormControl>
                             <SelectTrigger className="w-full">
@@ -290,6 +291,7 @@ const Create = () => {
                         <Select
                           onValueChange={field.onChange}
                           value={field.value}
+                          disabled={teacherLoading}
                         >
                           <FormControl>
                             <SelectTrigger className="w-full">
@@ -326,7 +328,12 @@ const Create = () => {
 
                 <Separator />
 
-                <Button type="submit" size="lg" className="w-full" disabled={formLoading}>
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="w-full"
+                  disabled={formLoading}
+                >
                   {formLoading ? (
                     <div className="flex gap-1">
                       <span>Creating Class...</span>
