@@ -82,6 +82,17 @@ const options: CreateDataProviderOptions = {
 
       return json.data ?? [];
     },
+
+    transformError: async (response) => {
+      const body = await response
+        .json<{ error?: string }>()
+        .catch(() => ({}) as { error?: string });
+
+      return {
+        message: body.error ?? "Failed to create record",
+        statusCode: response.status,
+      };
+    },
   },
 
   getOne: {

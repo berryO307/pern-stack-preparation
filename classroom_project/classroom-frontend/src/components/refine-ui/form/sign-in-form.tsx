@@ -30,7 +30,7 @@ export const SignInForm = () => {
 
   const { title } = useRefineOptions();
 
-  const { mutate: login } = useLogin();
+  const { mutate: login, isPending } = useLogin();
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -39,6 +39,10 @@ export const SignInForm = () => {
       email,
       password,
     });
+  };
+
+  const handleGuestLogin = () => {
+    login({ guest: true });
   };
 
   return (
@@ -143,31 +147,48 @@ export const SignInForm = () => {
               </Link>
             </div>
 
-            <Button type="submit" size="lg" className={cn("w-full", "mt-6")}>
+            <Button
+              type="submit"
+              size="lg"
+              className={cn("w-full", "mt-6")}
+              disabled={isPending}
+            >
               Sign in
             </Button>
           </form>
+
+          <div className={cn("flex", "items-center", "gap-4", "mt-6")}>
+            <Separator className={cn("flex-1")} />
+            <span className={cn("text-sm", "text-muted-foreground")}>or</span>
+            <Separator className={cn("flex-1")} />
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className={cn("w-full", "mt-6")}
+            onClick={handleGuestLogin}
+            disabled={isPending}
+          >
+            Continue as Guest
+          </Button>
         </CardContent>
 
         <Separator />
 
         <CardFooter>
-          <div className={cn("w-full", "text-center text-sm")}>
-            <span className={cn("text-sm", "text-muted-foreground")}>
-              No account?{" "}
-            </span>
-            <Link
-              to="/register"
-              className={cn(
-                "text-green-600",
-                "dark:text-green-400",
-                "font-semibold",
-                "underline"
-              )}
-            >
-              Sign up
-            </Link>
-          </div>
+          <p
+            className={cn(
+              "w-full",
+              "text-center",
+              "text-xs",
+              "text-muted-foreground"
+            )}
+          >
+            Guest sessions are temporary and limited - anything you create is
+            removed automatically after a couple of hours.
+          </p>
         </CardFooter>
       </Card>
     </div>

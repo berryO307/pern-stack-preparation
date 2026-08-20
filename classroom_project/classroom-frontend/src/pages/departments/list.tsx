@@ -14,8 +14,11 @@ import { DeleteButton } from "@/components/refine-ui/buttons/delete.tsx";
 import { Department } from "@/types";
 import { useDebouncedValue } from "@/hooks/use-debounced-value.ts";
 import { getFilterValue } from "@/lib/filters.ts";
+import { useIsAdmin } from "@/hooks/use-is-admin.ts";
 
 const DepartmentsList = () => {
+  const { isAdmin } = useIsAdmin();
+
   const DepartmentsTable = useTable<Department>({
     columns: useMemo<ColumnDef<Department>[]>(
       () => [
@@ -69,26 +72,30 @@ const DepartmentsList = () => {
               >
                 View
               </ShowButton>
-              <EditButton
-                resource="departments"
-                recordItemId={row.original.id}
-                variant="outline"
-                size="sm"
-              >
-                Edit
-              </EditButton>
-              <DeleteButton
-                resource="departments"
-                recordItemId={row.original.id}
-                size="sm"
-              >
-                Delete
-              </DeleteButton>
+              {isAdmin && (
+                <>
+                  <EditButton
+                    resource="departments"
+                    recordItemId={row.original.id}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Edit
+                  </EditButton>
+                  <DeleteButton
+                    resource="departments"
+                    recordItemId={row.original.id}
+                    size="sm"
+                  >
+                    Delete
+                  </DeleteButton>
+                </>
+              )}
             </div>
           ),
         },
       ],
-      [],
+      [isAdmin],
     ),
     refineCoreProps: {
       resource: "departments",
@@ -144,7 +151,7 @@ const DepartmentsList = () => {
             />
           </div>
 
-          <CreateButton resource="departments" />
+          {isAdmin && <CreateButton resource="departments" />}
         </div>
       </div>
 

@@ -22,6 +22,7 @@ import { DeleteButton } from "@/components/refine-ui/buttons/delete.tsx";
 import { User } from "@/types";
 import { useDebouncedValue } from "@/hooks/use-debounced-value.ts";
 import { getFilterValue } from "@/lib/filters.ts";
+import { useIsAdmin } from "@/hooks/use-is-admin.ts";
 
 const ROLE_BADGE_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
   admin: "default",
@@ -30,6 +31,8 @@ const ROLE_BADGE_VARIANT: Record<string, "default" | "secondary" | "outline"> = 
 };
 
 const UsersList = () => {
+  const { isAdmin } = useIsAdmin();
+
   const UsersTable = useTable<User>({
     columns: useMemo<ColumnDef<User>[]>(
       () => [
@@ -90,26 +93,30 @@ const UsersList = () => {
               >
                 View
               </ShowButton>
-              <EditButton
-                resource="users"
-                recordItemId={row.original.id}
-                variant="outline"
-                size="sm"
-              >
-                Edit
-              </EditButton>
-              <DeleteButton
-                resource="users"
-                recordItemId={row.original.id}
-                size="sm"
-              >
-                Delete
-              </DeleteButton>
+              {isAdmin && (
+                <>
+                  <EditButton
+                    resource="users"
+                    recordItemId={row.original.id}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Edit
+                  </EditButton>
+                  <DeleteButton
+                    resource="users"
+                    recordItemId={row.original.id}
+                    size="sm"
+                  >
+                    Delete
+                  </DeleteButton>
+                </>
+              )}
             </div>
           ),
         },
       ],
-      [],
+      [isAdmin],
     ),
     refineCoreProps: {
       resource: "users",
@@ -184,7 +191,7 @@ const UsersList = () => {
               </SelectContent>
             </Select>
 
-            <CreateButton resource="users" />
+            {isAdmin && <CreateButton resource="users" />}
           </div>
         </div>
       </div>
