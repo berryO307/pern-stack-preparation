@@ -1,4 +1,4 @@
-import { Refine, GitHubBanner } from "@refinedev/core";
+import { Authenticated, Refine, GitHubBanner } from "@refinedev/core";
 import { DevtoolsPanel, DevtoolsProvider } from "@refinedev/devtools";
 import { RefineKbar, RefineKbarProvider } from "@refinedev/kbar";
 
@@ -12,6 +12,7 @@ import routerProvider, {
 import { Login } from "./pages/login";
 import { Register } from "./pages/register";
 import { ForgotPassword } from "./pages/forgot-password";
+import { ResetPassword } from "./pages/reset-password";
 import { ErrorComponent } from "./components/refine-ui/layout/error-component";
 import { Layout } from "./components/refine-ui/layout/layout";
 import { Header } from "./components/refine-ui/layout/header";
@@ -35,6 +36,7 @@ import UsersCreate from "@/pages/users/create.tsx";
 import UsersEdit from "@/pages/users/edit.tsx";
 import UsersShow from "@/pages/users/show.tsx";
 import { dataProvider } from "@/providers/data.ts";
+import { authProvider } from "@/providers/auth.ts";
 
 function App() {
   return (
@@ -45,6 +47,7 @@ function App() {
           <DevtoolsProvider>
             <Refine
               dataProvider={dataProvider}
+              authProvider={authProvider}
               notificationProvider={useNotificationProvider()}
               routerProvider={routerProvider}
               options={{
@@ -92,9 +95,14 @@ function App() {
               <Routes>
                 <Route
                   element={
-                    <Layout>
-                      <Outlet />
-                    </Layout>
+                    <Authenticated
+                      key="authenticated-inner"
+                      fallback={<CatchAllNavigate to="/login" />}
+                    >
+                      <Layout>
+                        <Outlet />
+                      </Layout>
+                    </Authenticated>
                   }
                 >
                   <Route path="/" element={<Dashboard />} />
@@ -119,6 +127,34 @@ function App() {
                     <Route path="edit/:id" element={<UsersEdit />} />
                     <Route path="show/:id" element={<UsersShow />} />
                   </Route>
+                </Route>
+
+                <Route
+                  element={
+                    <Authenticated
+                      key="authenticated-outer"
+                      fallback={<Outlet />}
+                    >
+                      <NavigateToResource resource="dashboard" />
+                    </Authenticated>
+                  }
+                >
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/register" element={<Register />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
+                </Route>
+
+                <Route
+                  element={
+                    <Authenticated key="authenticated-catch-all">
+                      <Layout>
+                        <Outlet />
+                      </Layout>
+                    </Authenticated>
+                  }
+                >
+                  <Route path="*" element={<ErrorComponent />} />
                 </Route>
               </Routes>
               <Toaster />
