@@ -2,7 +2,7 @@ import { ListView } from "@/components/refine-ui/views/list-view.tsx";
 import { Breadcrumb } from "@/components/ui/breadcrumb.tsx";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input.tsx";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useTable } from "@refinedev/react-table";
 import { type ColumnDef } from "@tanstack/react-table";
 import { CreateButton } from "@/components/refine-ui/buttons/create.tsx";
@@ -12,14 +12,10 @@ import { ShowButton } from "@/components/refine-ui/buttons/show.tsx";
 import { EditButton } from "@/components/refine-ui/buttons/edit.tsx";
 import { DeleteButton } from "@/components/refine-ui/buttons/delete.tsx";
 import { Department } from "@/types";
+import { useDebouncedValue } from "@/hooks/use-debounced-value.ts";
+import { getFilterValue } from "@/lib/filters.ts";
 
 const DepartmentsList = () => {
-  const [searchQuery, setSearchQuery] = useState("");
-
-  const searchFilters = searchQuery
-    ? [{ field: "name", operator: "contains" as const, value: searchQuery }]
-    : [];
-
   const DepartmentsTable = useTable<Department>({
     columns: useMemo<ColumnDef<Department>[]>(
       () => [
@@ -98,13 +94,34 @@ const DepartmentsList = () => {
       resource: "departments",
       pagination: { pageSize: 10, mode: "server" },
       filters: {
-        permanent: [...searchFilters],
+        defaultBehavior: "replace",
       },
       sorters: {
         initial: [{ field: "id", order: "desc" }],
       },
+      syncWithLocation: true,
     },
   });
+
+  const { filters, setFilters } = DepartmentsTable.refineCore;
+
+  const [searchQuery, setSearchQuery] = useState(() => getFilterValue(filters, "name"));
+  const debouncedSearch = useDebouncedValue(searchQuery, 300);
+
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    setFilters(
+      debouncedSearch
+        ? [{ field: "name", operator: "contains", value: debouncedSearch }]
+        : [],
+      "replace",
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
 
   return (
     <ListView>

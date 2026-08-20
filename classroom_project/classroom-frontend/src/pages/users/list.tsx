@@ -2,7 +2,7 @@ import { ListView } from "@/components/refine-ui/views/list-view.tsx";
 import { Breadcrumb } from "@/components/ui/breadcrumb.tsx";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input.tsx";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useTable } from "@refinedev/react-table";
 import { type ColumnDef } from "@tanstack/react-table";
 import {
@@ -20,6 +20,8 @@ import { ShowButton } from "@/components/refine-ui/buttons/show.tsx";
 import { EditButton } from "@/components/refine-ui/buttons/edit.tsx";
 import { DeleteButton } from "@/components/refine-ui/buttons/delete.tsx";
 import { User } from "@/types";
+import { useDebouncedValue } from "@/hooks/use-debounced-value.ts";
+import { getFilterValue } from "@/lib/filters.ts";
 
 const ROLE_BADGE_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
   admin: "default",
@@ -28,18 +30,6 @@ const ROLE_BADGE_VARIANT: Record<string, "default" | "secondary" | "outline"> = 
 };
 
 const UsersList = () => {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedRole, setSelectedRole] = useState("all");
-
-  const roleFilters =
-    selectedRole === "all"
-      ? []
-      : [{ field: "role", operator: "eq" as const, value: selectedRole }];
-
-  const searchFilters = searchQuery
-    ? [{ field: "name", operator: "contains" as const, value: searchQuery }]
-    : [];
-
   const UsersTable = useTable<User>({
     columns: useMemo<ColumnDef<User>[]>(
       () => [
@@ -125,13 +115,37 @@ const UsersList = () => {
       resource: "users",
       pagination: { pageSize: 10, mode: "server" },
       filters: {
-        permanent: [...searchFilters, ...roleFilters],
+        defaultBehavior: "replace",
       },
       sorters: {
         initial: [{ field: "createdAt", order: "desc" }],
       },
+      syncWithLocation: true,
     },
   });
+
+  const { filters, setFilters } = UsersTable.refineCore;
+
+  const [searchQuery, setSearchQuery] = useState(() => getFilterValue(filters, "name"));
+  const [selectedRole, setSelectedRole] = useState(() => getFilterValue(filters, "role") || "all");
+  const debouncedSearch = useDebouncedValue(searchQuery, 300);
+
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    const nextFilters = [];
+    if (debouncedSearch) {
+      nextFilters.push({ field: "name", operator: "contains" as const, value: debouncedSearch });
+    }
+    if (selectedRole !== "all") {
+      nextFilters.push({ field: "role", operator: "eq" as const, value: selectedRole });
+    }
+    setFilters(nextFilters, "replace");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, selectedRole]);
 
   return (
     <ListView>
