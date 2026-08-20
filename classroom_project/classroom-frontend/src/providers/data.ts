@@ -1,5 +1,5 @@
 import { createDataProvider, CreateDataProviderOptions } from "@refinedev/rest";
-import { CreateResponse, ListResponse } from "@/types";
+import { CreateResponse, GetOneResponse, ListResponse } from "@/types";
 import { BACKEND_BASE_URL } from "@/constants";
 
 if (!BACKEND_BASE_URL) {
@@ -30,6 +30,12 @@ const options: CreateDataProviderOptions = {
           if (field === "role") params.role = value;
           if (field === "name" || field === "email") params.search = value;
         }
+
+        if (resource === "classes") {
+          if (field === "name") params.search = value;
+          if (field === "subject") params.subject = value;
+          if (field === "teacher") params.teacher = value;
+        }
       });
 
       return params;
@@ -49,14 +55,24 @@ const options: CreateDataProviderOptions = {
   create: {
     getEndpoint: ({ resource }) => resource,
 
-    buildBodyParams: async ({variables}) => variables,
+    buildBodyParams: async ({ variables }) => variables,
 
     mapResponse: async (response) => {
       const json: CreateResponse = await response.json();
 
       return json.data ?? [];
-    }
-  }
+    },
+  },
+
+  getOne: {
+    getEndpoint: ({ resource, id }) => `${resource}/${id}`,
+
+    mapResponse: async (response) => {
+      const json: GetOneResponse = await response.json();
+
+      return json.data ?? [];
+    },
+  },
 };
 
 const { dataProvider } = createDataProvider(BACKEND_BASE_URL, options);
