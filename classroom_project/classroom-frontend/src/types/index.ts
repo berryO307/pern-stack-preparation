@@ -150,6 +150,56 @@ export type UserDetails = User & {
   enrolledClasses?: Enrollment[];
 };
 
+export type DashboardMetrics = {
+  totalStudents: number;
+  totalTeachers: number;
+  totalAdmins: number;
+  totalUsers: number;
+  totalDepartments: number;
+  totalSubjects: number;
+  totalClasses: number;
+  activeClasses: number;
+  totalEnrollments: number;
+  totalCapacity: number;
+  capacityUtilization: number;
+};
+
+export type EnrollmentTrendPoint = {
+  date: string;
+  count: number;
+};
+
+export type DepartmentClassCount = {
+  department: string;
+  count: number | string;
+};
+
+export type CapacityStatusBucket = {
+  status: "low" | "medium" | "high" | "full";
+  label: string;
+  count: number;
+};
+
+export type UserRoleCount = {
+  role: "student" | "teacher" | "admin";
+  count: number;
+};
+
+export type ActivityItem = {
+  type: "enrollment" | "class" | "user";
+  message: string;
+  timestamp: string;
+};
+
+export type DashboardData = {
+  metrics: DashboardMetrics;
+  enrollmentTrends: EnrollmentTrendPoint[];
+  classesByDepartment: DepartmentClassCount[];
+  capacityStatus: CapacityStatusBucket[];
+  userDistribution: UserRoleCount[];
+  activity: ActivityItem[];
+};
+
 export type SignUpPayload = {
   email: string;
   name: string;

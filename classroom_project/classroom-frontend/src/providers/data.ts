@@ -133,6 +133,14 @@ const options: CreateDataProviderOptions = {
       };
     },
   },
+
+  custom: {
+    mapResponse: async (response) => {
+      const json: GetOneResponse = await response.json();
+
+      return json.data ?? {};
+    },
+  },
 };
 
 const { dataProvider } = createDataProvider(BACKEND_BASE_URL, options);
