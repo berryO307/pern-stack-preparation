@@ -10,6 +10,7 @@ import enrollmentsRouter from "./routes/enrollments.js";
 import dashboardRouter from "./routes/dashboard.js";
 import cors from "cors";
 import securityMiddleware from "./middleware/security.js";
+import sessionMiddleware from "./middleware/session.js";
 import {toNodeHandler} from "better-auth/node";
 import {auth} from "./lib/auth.js";
 
@@ -30,6 +31,7 @@ app.all('/api/auth/*splat', toNodeHandler(auth));
 
 app.use(express.json());
 
+app.use(sessionMiddleware);
 app.use(securityMiddleware);
 
 app.use('/api/subjects', subjectsRouter)

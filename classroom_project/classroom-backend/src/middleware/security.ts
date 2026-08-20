@@ -3,8 +3,6 @@ import aj from '../config/arcjet.js';
 import {ArcjetNodeRequest, ArcjetRequest, slidingWindow} from "@arcjet/node";
 
 const securityMiddleware = async (req: Request, res:Response, next: NextFunction) => {
-   if(process.env.NODE_ENV !== 'test') return next();
-
    try {
        const role: RateLimitRole = req.user?.role ?? 'guest';
 
