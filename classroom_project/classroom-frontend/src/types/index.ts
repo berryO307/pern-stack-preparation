@@ -121,6 +121,7 @@ export type ClassDetails = {
   description: string;
   status: "active" | "inactive";
   capacity: number;
+  enrolledCount?: number;
   courseCode: string;
   courseName: string;
   bannerUrl?: string;
@@ -130,6 +131,15 @@ export type ClassDetails = {
   department?: Department;
   schedules: Schedule[];
   inviteCode?: string;
+};
+
+export type Enrollment = {
+  id: number;
+  studentId: string;
+  classId: number;
+  student?: User;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type SignUpPayload = {

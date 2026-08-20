@@ -587,5 +587,13 @@
         @apply text-sm text-muted-foreground space-y-1.5 list-decimal list-inside mt-2;
       }
     }
+
+    .enrollments {
+      @apply space-y-2;
+
+      > div:first-child p {
+        @apply text-xs font-bold text-muted-foreground uppercase tracking-wider;
+      }
+    }
   }
 }
