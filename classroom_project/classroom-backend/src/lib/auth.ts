@@ -12,6 +12,11 @@ export const auth = betterAuth({
     }),
     emailAndPassword: {
         enabled: true,
+        // No email provider is configured for this project yet, so the reset link is
+        // logged instead of sent. Replace with a real provider (Resend, SES, etc.) before shipping.
+        sendResetPassword: async ({ user, url }) => {
+            console.log(`Password reset requested for ${user.email}: ${url}`);
+        },
     },
     user: {
         additionalFields: {
