@@ -2,6 +2,7 @@ import express from "express";
 import {db} from "../db/index.js";
 import {classes, classStatusEnum, departments, enrollments, subjects, user} from "../db/schema/index.js";
 import {and, asc, desc, eq, getTableColumns, ilike, or, sql} from "drizzle-orm";
+import {enforceWriteQuota, incrementWriteCount, requireAuth} from "../middleware/authorize.js";
 
 const router = express.Router();
 
@@ -13,20 +14,33 @@ const SORTABLE_CLASS_FIELDS = {
     createdAt: classes.createdAt,
 } as const;
 
-router.post('/', async (req, res) => {
+router.post('/', requireAuth, enforceWriteQuota, async (req, res) => {
     try {
         const { name, teacherId, subjectId, capacity, description, status, bannerUrl, bannerCldPubId } = req.body;
+
+        if (!name || !teacherId || !subjectId) {
+            return res.status(400).json({error: "Name, teacher and subject are required"});
+        }
+
         const [createdClass] = await db
             .insert(classes)
-            .values({... req.body, inviteCode: Math.random().toString(36).substring(2, 9), schedules: []})
+            .values({
+                name, teacherId, subjectId, capacity, description, status, bannerUrl, bannerCldPubId,
+                inviteCode: Math.random().toString(36).substring(2, 9),
+                schedules: [],
+                createdBy: req.user!.id,
+            })
             .returning({ id: classes.id});
 
         if (!createdClass) throw Error;
+
+        await incrementWriteCount(req.user!.id);
+
         res.status(201).json({data: createdClass});
 
     }catch(e) {
         console.error(`POST /classes error: ${e}`);
-        res.status(500).json({error: e});
+        res.status(500).json({error: 'Failed to create class'});
 
     }
 })

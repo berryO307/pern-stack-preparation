@@ -2,6 +2,7 @@ import express from "express";
 import { db } from "../db/index.js";
 import { departments, subjects } from "../db/schema/index.js";
 import { and, asc, desc, eq, getTableColumns, ilike, or, sql } from "drizzle-orm";
+import { requireAdmin } from "../middleware/authorize.js";
 
 const router = express.Router();
 
@@ -102,7 +103,7 @@ router.get("/:id", async (req, res) => {
     }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requireAdmin, async (req, res) => {
     try {
         const { name, code, description } = req.body;
 
@@ -125,7 +126,7 @@ router.post("/", async (req, res) => {
     }
 });
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", requireAdmin, async (req, res) => {
     try {
         const departmentId = Number(req.params.id);
         if (!Number.isFinite(departmentId)) return res.status(404).json({ error: "No department found" });
@@ -150,7 +151,7 @@ router.put("/:id", async (req, res) => {
     }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireAdmin, async (req, res) => {
     try {
         const departmentId = Number(req.params.id);
         if (!Number.isFinite(departmentId)) return res.status(404).json({ error: "No department found" });

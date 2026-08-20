@@ -2,6 +2,7 @@ import express from "express";
 import { db } from "../db/index.js";
 import { classes, enrollments, user } from "../db/schema/index.js";
 import { and, desc, eq, getTableColumns, sql } from "drizzle-orm";
+import { enforceWriteQuota, incrementWriteCount, requireAuth } from "../middleware/authorize.js";
 
 const router = express.Router();
 
@@ -47,7 +48,7 @@ router.get("/", async (req, res) => {
     }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requireAuth, enforceWriteQuota, async (req, res) => {
     try {
         const { classId, studentId } = req.body;
 
@@ -73,8 +74,10 @@ router.post("/", async (req, res) => {
 
         const [createdEnrollment] = await db
             .insert(enrollments)
-            .values({ classId: targetClass.id, studentId })
+            .values({ classId: targetClass.id, studentId, createdBy: req.user!.id })
             .returning();
+
+        await incrementWriteCount(req.user!.id);
 
         res.status(201).json({ data: createdEnrollment });
     } catch (e: any) {
@@ -86,10 +89,21 @@ router.post("/", async (req, res) => {
     }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireAuth, async (req, res) => {
     try {
         const enrollmentId = Number(req.params.id);
         if (!Number.isFinite(enrollmentId)) return res.status(404).json({ error: "No enrollment found" });
+
+        const [existingEnrollment] = await db
+            .select({ createdBy: enrollments.createdBy })
+            .from(enrollments)
+            .where(eq(enrollments.id, enrollmentId));
+
+        if (!existingEnrollment) return res.status(404).json({ error: "No enrollment found" });
+
+        if (req.user!.role !== "admin" && existingEnrollment.createdBy !== req.user!.id) {
+            return res.status(403).json({ error: "You can only unenroll students you enrolled yourself" });
+        }
 
         const [deletedEnrollment] = await db
             .delete(enrollments)

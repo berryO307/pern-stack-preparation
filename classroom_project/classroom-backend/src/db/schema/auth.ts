@@ -1,4 +1,4 @@
-import {boolean, index, pgEnum, pgTable, text, timestamp} from "drizzle-orm/pg-core";
+import {boolean, index, integer, pgEnum, pgTable, text, timestamp} from "drizzle-orm/pg-core";
 import {relations} from "drizzle-orm";
 
 const timestamps = {
@@ -16,6 +16,12 @@ export const user = pgTable('user', {
     image: text('image'),
     role: roleEnum('role').notNull().default('student'),
     imageCldPubId: text('image_cld_pub_id'),
+    // Set by the anonymous plugin for guest accounts; guest users (and everything
+    // they created) are purged by the cleanup sweep once they go stale.
+    isAnonymous: boolean('is_anonymous').notNull().default(false),
+    // Total records this account has created across departments/subjects/classes/
+    // enrollments/users, enforced as a quota for non-admin accounts.
+    writeCount: integer('write_count').notNull().default(0),
     ...timestamps
 });
 

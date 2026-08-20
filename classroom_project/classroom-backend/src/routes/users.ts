@@ -3,6 +3,7 @@ import {classes, enrollments, roleEnum, subjects, user} from "../db/schema/index
 import {and, asc, desc, eq, getTableColumns, ilike, or, sql} from "drizzle-orm";
 import {db} from "../db/index.js";
 import {randomUUID} from "crypto";
+import {requireAdmin} from "../middleware/authorize.js";
 const router = express.Router();
 
 const pgErrorCode = (e: any): string | undefined => e?.code ?? e?.cause?.code;
@@ -111,7 +112,7 @@ router.get("/:id", async (req, res) => {
     }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", requireAdmin, async (req, res) => {
     try {
         const { name, email, role, image, imageCldPubId } = req.body;
 
@@ -134,7 +135,7 @@ router.post("/", async (req, res) => {
     }
 });
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", requireAdmin, async (req, res) => {
     try {
         const userId = req.params.id;
         const { name, email, role, image, imageCldPubId } = req.body;
@@ -142,7 +143,7 @@ router.put("/:id", async (req, res) => {
         const [updatedUser] = await db
             .update(user)
             .set({ name, email, role, image, imageCldPubId })
-            .where(eq(user.id, userId))
+            .where(sql`${user.id} = ${userId}`)
             .returning();
 
         if (!updatedUser) return res.status(404).json({ error: "No user found" });
@@ -157,13 +158,13 @@ router.put("/:id", async (req, res) => {
     }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireAdmin, async (req, res) => {
     try {
         const userId = req.params.id;
 
         const [deletedUser] = await db
             .delete(user)
-            .where(eq(user.id, userId))
+            .where(sql`${user.id} = ${userId}`)
             .returning({ id: user.id });
 
         if (!deletedUser) return res.status(404).json({ error: "No user found" });
