@@ -95,6 +95,21 @@ export type Department = {
   description: string;
 };
 
+export type Class = {
+  id: number;
+  name: string;
+  description?: string;
+  status: "active" | "inactive" | "archived";
+  capacity: number;
+  bannerUrl?: string;
+  bannerCldPubId?: string;
+  inviteCode?: string;
+  subject?: Subject;
+  teacher?: User;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type ClassDetails = {
   id: number;
   name: string;

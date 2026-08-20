@@ -1,5 +1,5 @@
 import { createDataProvider, CreateDataProviderOptions } from "@refinedev/rest";
-import { CreateResponse, ListResponse } from "@/types";
+import { CreateResponse, GetOneResponse, ListResponse } from "@/types";
 import { BACKEND_BASE_URL } from "@/constants";
 
 if (!BACKEND_BASE_URL) {
@@ -10,11 +10,16 @@ const options: CreateDataProviderOptions = {
   getList: {
     getEndpoint: ({ resource }) => resource,
 
-    buildQueryParams: async ({ resource, pagination, filters }) => {
+    buildQueryParams: async ({ resource, pagination, filters, sorters }) => {
       const page = pagination?.currentPage ?? 1;
       const pageSize = pagination?.pageSize ?? 10;
 
       const params: Record<string, string | number> = { page, limit: pageSize };
+
+      if (resource === "classes" && sorters?.[0]) {
+        params.sortField = sorters[0].field;
+        params.sortOrder = sorters[0].order;
+      }
 
       filters?.forEach((filter) => {
         const field = "field" in filter ? filter.field : "";
@@ -29,6 +34,12 @@ const options: CreateDataProviderOptions = {
         if (resource === "users") {
           if (field === "role") params.role = value;
           if (field === "name" || field === "email") params.search = value;
+        }
+
+        if (resource === "classes") {
+          if (field === "name") params.search = value;
+          if (field === "subject") params.subject = value;
+          if (field === "teacher") params.teacher = value;
         }
       });
 
@@ -49,14 +60,24 @@ const options: CreateDataProviderOptions = {
   create: {
     getEndpoint: ({ resource }) => resource,
 
-    buildBodyParams: async ({variables}) => variables,
+    buildBodyParams: async ({ variables }) => variables,
 
     mapResponse: async (response) => {
       const json: CreateResponse = await response.json();
 
       return json.data ?? [];
-    }
-  }
+    },
+  },
+
+  getOne: {
+    getEndpoint: ({ resource, id }) => `${resource}/${id}`,
+
+    mapResponse: async (response) => {
+      const json: GetOneResponse = await response.json();
+
+      return json.data;
+    },
+  },
 };
 
 const { dataProvider } = createDataProvider(BACKEND_BASE_URL, options);
