@@ -10,11 +10,16 @@ const options: CreateDataProviderOptions = {
   getList: {
     getEndpoint: ({ resource }) => resource,
 
-    buildQueryParams: async ({ resource, pagination, filters }) => {
+    buildQueryParams: async ({ resource, pagination, filters, sorters }) => {
       const page = pagination?.currentPage ?? 1;
       const pageSize = pagination?.pageSize ?? 10;
 
       const params: Record<string, string | number> = { page, limit: pageSize };
+
+      if (resource === "classes" && sorters?.[0]) {
+        params.sortField = sorters[0].field;
+        params.sortOrder = sorters[0].order;
+      }
 
       filters?.forEach((filter) => {
         const field = "field" in filter ? filter.field : "";
@@ -70,7 +75,7 @@ const options: CreateDataProviderOptions = {
     mapResponse: async (response) => {
       const json: GetOneResponse = await response.json();
 
-      return json.data ?? [];
+      return json.data;
     },
   },
 };

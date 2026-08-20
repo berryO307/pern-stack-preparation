@@ -1,7 +1,6 @@
 import React from "react";
 import { ClassDetails } from "@/types";
 import { useShow } from "@refinedev/core";
-import { isError } from "node:util";
 import {
   ShowView,
   ShowViewHeader,
@@ -35,7 +34,7 @@ const Show = () => {
     );
   }
 
-  const teacherName = classDetails.teacherName?.name ?? "Unknow";
+  const teacherName = classDetails.teacher?.name ?? "Unknow";
   const teachersInitials = teacherName
     .split(" ")
     .filter(Boolean)
@@ -61,16 +60,17 @@ const Show = () => {
     <ShowView className="class-view class-show">
       <ShowViewHeader resource="classes" title="class details" />
       <div className="banner">
-        {bannerUrl ? (
+        {bannerCldPubId ? (
           <AdvancedImage
             alt="class Banner"
-            cldImg={bannerPhoto(bannerCldPubId ?? "", name)}
+            cldImg={bannerPhoto(bannerCldPubId, name)}
           />
+        ) : bannerUrl ? (
+          <img src={bannerUrl} alt="class Banner" />
         ) : (
           <div className="placeholder" />
         )}
       </div>
-      ;
       <Card className="details-card">
         <div className="details-header">
           <div>

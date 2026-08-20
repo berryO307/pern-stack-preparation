@@ -176,7 +176,7 @@ const ClassesList = () => {
       <h1 className="page-title">Classes</h1>
 
       <div className="intro-row">
-        <p>Quick Acesss to essential metrics and management tools.</p>
+        <p>Quick Access to essential metrics and management tools.</p>
 
         <div className="actions-row">
           <div className="search-field">
