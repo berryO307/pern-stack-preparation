@@ -111,6 +111,7 @@ const DepartmentForm = ({ action }: DepartmentFormProps) => {
                       <Textarea
                         placeholder="Brief description about the department"
                         {...field}
+                        value={field.value ?? ""}
                       />
                     </FormControl>
                     <FormMessage />

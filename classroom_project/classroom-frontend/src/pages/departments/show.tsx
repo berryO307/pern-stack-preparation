@@ -54,9 +54,9 @@ const Show = () => {
         <div className="subject">
           <p>Subjects</p>
           {subjects.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
+            <div className="text-sm text-muted-foreground">
               No subjects assigned to this department yet.
-            </p>
+            </div>
           ) : (
             <div className="flex flex-col gap-3">
               {subjects.map((subject) => (

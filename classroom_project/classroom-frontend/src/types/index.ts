@@ -63,6 +63,8 @@ export interface UploadWidgetProps {
   value?: UploadWidgetValue | null;
   onChange?: (value: UploadWidgetValue | null) => void;
   disabled?: boolean;
+  label?: string;
+  previewAlt?: string;
 }
 
 export enum UserRole {
@@ -138,8 +140,14 @@ export type Enrollment = {
   studentId: string;
   classId: number;
   student?: User;
+  class?: Class;
   createdAt?: string;
   updatedAt?: string;
+};
+
+export type UserDetails = User & {
+  classesTaught?: Class[];
+  enrolledClasses?: Enrollment[];
 };
 
 export type SignUpPayload = {

@@ -16,7 +16,12 @@ const options: CreateDataProviderOptions = {
 
       const params: Record<string, string | number> = { page, limit: pageSize };
 
-      if ((resource === "classes" || resource === "departments") && sorters?.[0]) {
+      if (
+        (resource === "classes" ||
+          resource === "departments" ||
+          resource === "users") &&
+        sorters?.[0]
+      ) {
         params.sortField = sorters[0].field;
         params.sortOrder = sorters[0].order;
       }

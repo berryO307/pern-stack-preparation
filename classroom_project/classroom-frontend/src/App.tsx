@@ -20,7 +20,7 @@ import { Toaster } from "./components/refine-ui/notification/toaster";
 import { ThemeProvider } from "./components/refine-ui/theme/theme-provider";
 import "./App.css";
 import Dashboard from "@/pages/dashboard.tsx";
-import { Building2, BookOpen, GraduationCap, Home } from "lucide-react";
+import { Building2, BookOpen, GraduationCap, Home, Users } from "lucide-react";
 import SubjectsList from "@/pages/subjects/list.tsx";
 import SubjectsCreate from "@/pages/subjects/create.tsx";
 import ClassesList from "@/pages/classes/list.tsx";
@@ -30,6 +30,10 @@ import DepartmentsList from "@/pages/departments/list.tsx";
 import DepartmentsCreate from "@/pages/departments/create.tsx";
 import DepartmentsEdit from "@/pages/departments/edit.tsx";
 import DepartmentsShow from "@/pages/departments/show.tsx";
+import UsersList from "@/pages/users/list.tsx";
+import UsersCreate from "@/pages/users/create.tsx";
+import UsersEdit from "@/pages/users/edit.tsx";
+import UsersShow from "@/pages/users/show.tsx";
 import { dataProvider } from "@/providers/data.ts";
 
 function App() {
@@ -75,6 +79,14 @@ function App() {
                   show: "/classes/show/:id",
                   meta: { label: "Classes", icon: <GraduationCap /> },
                 },
+                {
+                  name: "users",
+                  list: "/users",
+                  create: "/users/create",
+                  edit: "/users/edit/:id",
+                  show: "/users/show/:id",
+                  meta: { label: "Users", icon: <Users /> },
+                },
               ]}
             >
               <Routes>
@@ -100,6 +112,12 @@ function App() {
                     <Route index element={<ClassesList />} />
                     <Route path="create" element={<ClassesCreate />} />
                     <Route path="show/:id" element={<ClassesShow />} />
+                  </Route>
+                  <Route path="users">
+                    <Route index element={<UsersList />} />
+                    <Route path="create" element={<UsersCreate />} />
+                    <Route path="edit/:id" element={<UsersEdit />} />
+                    <Route path="show/:id" element={<UsersShow />} />
                   </Route>
                 </Route>
               </Routes>
