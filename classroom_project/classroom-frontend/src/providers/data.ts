@@ -16,7 +16,7 @@ const options: CreateDataProviderOptions = {
 
       const params: Record<string, string | number> = { page, limit: pageSize };
 
-      if (resource === "classes" && sorters?.[0]) {
+      if ((resource === "classes" || resource === "departments") && sorters?.[0]) {
         params.sortField = sorters[0].field;
         params.sortOrder = sorters[0].order;
       }
@@ -40,6 +40,10 @@ const options: CreateDataProviderOptions = {
           if (field === "name") params.search = value;
           if (field === "subject") params.subject = value;
           if (field === "teacher") params.teacher = value;
+        }
+
+        if (resource === "departments") {
+          if (field === "name" || field === "code") params.search = value;
         }
       });
 
@@ -76,6 +80,47 @@ const options: CreateDataProviderOptions = {
       const json: GetOneResponse = await response.json();
 
       return json.data;
+    },
+  },
+
+  update: {
+    getEndpoint: ({ resource, id }) => `${resource}/${id}`,
+    getRequestMethod: () => "put",
+
+    buildBodyParams: async ({ variables }) => variables,
+
+    mapResponse: async (response) => {
+      const json: GetOneResponse = await response.json();
+
+      return json.data ?? {};
+    },
+
+    transformError: async (response) => {
+      const body = await response
+        .json<{ error?: string }>()
+        .catch(() => ({}) as { error?: string });
+
+      return {
+        message: body.error ?? "Failed to update record",
+        statusCode: response.status,
+      };
+    },
+  },
+
+  deleteOne: {
+    getEndpoint: ({ resource, id }) => `${resource}/${id}`,
+
+    mapResponse: async () => undefined,
+
+    transformError: async (response) => {
+      const body = await response
+        .json<{ error?: string }>()
+        .catch(() => ({}) as { error?: string });
+
+      return {
+        message: body.error ?? "Failed to delete record",
+        statusCode: response.status,
+      };
     },
   },
 };
