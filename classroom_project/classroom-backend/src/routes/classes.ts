@@ -1,6 +1,6 @@
 import express from "express";
 import {db} from "../db/index.js";
-import {classes, departments, enrollments, subjects, user} from "../db/schema/index.js";
+import {classes, classStatusEnum, departments, enrollments, subjects, user} from "../db/schema/index.js";
 import {and, asc, desc, eq, getTableColumns, ilike, or, sql} from "drizzle-orm";
 
 const router = express.Router();
@@ -34,7 +34,7 @@ router.post('/', async (req, res) => {
 // Get all classes with optional search, filtering and pagination
 router.get("/", async (req, res) => {
     try {
-        const { search, subject, teacher, page = 1, limit = 10, sortField, sortOrder } = req.query;
+        const { search, subject, teacher, status, page = 1, limit = 10, sortField, sortOrder } = req.query;
 
         const currentPage = Math.max(1, parseInt(String(page), 10) || 1);
         const limitPerPage = Math.min(Math.max(1, parseInt(String(limit), 10) || 10), 100);
@@ -51,8 +51,8 @@ router.get("/", async (req, res) => {
         if (search) {
             filterConditions.push(
                 or(
-                    ilike(classes.name, `%${search}`),
-                    ilike(classes.inviteCode, `%${search}`),
+                    ilike(classes.name, `%${search}%`),
+                    ilike(classes.inviteCode, `%${search}%`),
                 )
             );
         }
@@ -65,6 +65,10 @@ router.get("/", async (req, res) => {
         if (teacher) {
             const teacherPattern = `%${String(teacher).replace(/[%_]/g, '\\$&')}%`;
             filterConditions.push(ilike(user.name, teacherPattern));
+        }
+        // If status filter exists, match status exactly
+        if (status) {
+            filterConditions.push(eq(classes.status, String(status) as typeof classStatusEnum.enumValues[number]));
         }
         // Combine all filters using AND if any exist
         const whereClause = filterConditions.length > 0 ? and(...filterConditions) : undefined;
