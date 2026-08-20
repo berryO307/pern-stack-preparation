@@ -1,9 +1,17 @@
 import express from "express";
 import {db} from "../db/index.js";
 import {classes, departments, subjects, user} from "../db/schema/index.js";
-import {and, desc, eq, getTableColumns, ilike, or, sql} from "drizzle-orm";
+import {and, asc, desc, eq, getTableColumns, ilike, or, sql} from "drizzle-orm";
 
 const router = express.Router();
+
+const SORTABLE_CLASS_FIELDS = {
+    id: classes.id,
+    name: classes.name,
+    capacity: classes.capacity,
+    status: classes.status,
+    createdAt: classes.createdAt,
+} as const;
 
 router.post('/', async (req, res) => {
     try {
@@ -26,11 +34,18 @@ router.post('/', async (req, res) => {
 // Get all classes with optional search, filtering and pagination
 router.get("/", async (req, res) => {
     try {
-        const { search, subject, teacher, page = 1, limit = 10 } = req.query;
+        const { search, subject, teacher, page = 1, limit = 10, sortField, sortOrder } = req.query;
 
         const currentPage = Math.max(1, parseInt(String(page), 10) || 1);
         const limitPerPage = Math.min(Math.max(1, parseInt(String(limit), 10) || 10), 100);
         const offset = (currentPage - 1) * limitPerPage;
+
+        // Validate the requested sort field/direction, falling back to the default ordering
+        const sortColumn = SORTABLE_CLASS_FIELDS[String(sortField) as keyof typeof SORTABLE_CLASS_FIELDS];
+        const orderByClause = sortColumn
+            ? (sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn))
+            : desc(classes.createdAt);
+
         const filterConditions = [];
         // If search query exists, filter by class name OR invite code
         if (search) {
@@ -69,7 +84,7 @@ router.get("/", async (req, res) => {
             .leftJoin(subjects, eq(classes.subjectId, subjects.id))
             .leftJoin(user, eq(classes.teacherId, user.id))
             .where(whereClause)
-            .orderBy(desc(classes.createdAt))
+            .orderBy(orderByClause)
             .limit(limitPerPage)
             .offset(offset);
 
