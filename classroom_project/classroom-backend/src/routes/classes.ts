@@ -1,6 +1,6 @@
 import express from "express";
 import {db} from "../db/index.js";
-import {classes, departments, subjects, user} from "../db/schema/index.js";
+import {classes, departments, enrollments, subjects, user} from "../db/schema/index.js";
 import {and, asc, desc, eq, getTableColumns, ilike, or, sql} from "drizzle-orm";
 
 const router = express.Router();
@@ -131,7 +131,12 @@ router.get('/:id', async (req, res) => {
 
     if (!classDetail) return res.status(404).json({error: "No class found"});
 
-    res.status(200).json({data: classDetail});
+    const enrolledCountResult = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(enrollments)
+        .where(eq(enrollments.classId, classId));
+
+    res.status(200).json({data: {...classDetail, enrolledCount: Number(enrolledCountResult[0]?.count ?? 0)}});
 })
 
 export default router;
