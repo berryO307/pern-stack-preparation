@@ -1,12 +1,16 @@
 import { betterAuth } from "better-auth";
-import { anonymous } from "better-auth/plugins";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "../db/index.js";
 import * as schema from '../db/schema/auth.js'
 
-// Randomized so guest display names don't collide/look scripted, e.g. "Guest Falcon 4821".
-const GUEST_ADJECTIVES = ["Curious", "Swift", "Bright", "Quiet", "Bold", "Calm", "Eager", "Nimble"];
-const GUEST_ANIMALS = ["Falcon", "Otter", "Panda", "Heron", "Fox", "Lynx", "Wren", "Ibis"];
+// The site owner's real identity — checked on every new sign-up so the one
+// account that should have standing (non-workspace-scoped) admin access gets
+// it automatically via their own Google/GitHub login, with no password and
+// no separate seed step. Comma-separated, case-insensitive.
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
 
 export const auth = betterAuth({
     secret: process.env.BETTER_AUTH_SECRET!,
@@ -15,25 +19,42 @@ export const auth = betterAuth({
         provider: "pg",
         schema,
     }),
+    // Social-only: this is a public demo, so no password/reset/verification
+    // state machine and no email provider to run. See db/schema/auth.ts for
+    // the account.password column this leaves unused — dropping it is a
+    // deliberate follow-up migration once nothing writes to it anymore,
+    // not part of this change.
     emailAndPassword: {
-        enabled: true,
-        // Public self-registration is disabled - the only email/password account is the
-        // admin, seeded directly (see db-seed.ts). Everyone else uses the anonymous guest
-        // flow below, so no real visitor's email is ever collected or persisted.
-        disableSignUp: true,
-        // No email provider is configured for this project yet, so the reset link is
-        // logged instead of sent. Replace with a real provider (Resend, SES, etc.) before shipping.
-        sendResetPassword: async ({ user, url }) => {
-            console.log(`Password reset requested for ${user.email}: ${url}`);
+        enabled: false,
+    },
+    socialProviders: {
+        google: {
+            clientId: process.env.GOOGLE_CLIENT_ID!,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
         },
+        github: {
+            clientId: process.env.GITHUB_CLIENT_ID!,
+            clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+        },
+    },
+    account: {
+        accountLinking: {
+            // Already the default in this Better Auth version, set explicitly:
+            // a GitHub sign-in and a later Google sign-in on the same verified
+            // email link into one user rather than creating two.
+            enabled: true,
+            trustedProviders: ["google", "github"],
+        },
+    },
+    // 7 days — deliberately longer than a demo workspace's 1-hour lifetime.
+    // The Better Auth session (a real Google/GitHub identity) outlives the
+    // ephemeral workspace on purpose: returning visitors get recognized and
+    // re-provisioned, not logged out, when their workspace expires.
+    session: {
+        expiresIn: 60 * 60 * 24 * 7,
     },
     user: {
         additionalFields: {
-            // input: false — role must never be settable by the client through
-            // better-auth's own account/profile endpoints (e.g. update-user).
-            // The only legitimate way to change a role is the app's own
-            // PUT /api/users/:id, which is requireAdmin-gated and writes via a
-            // direct Drizzle query that bypasses this field config entirely.
             role: {
                 type: "string", required: true, defaultValue: 'student', input: false,
             },
@@ -42,15 +63,14 @@ export const auth = betterAuth({
             }
         }
     },
-    plugins: [
-        anonymous({
-            emailDomainName: "guest.local",
-            generateName: () => {
-                const adjective = GUEST_ADJECTIVES[Math.floor(Math.random() * GUEST_ADJECTIVES.length)];
-                const animal = GUEST_ANIMALS[Math.floor(Math.random() * GUEST_ANIMALS.length)];
-                const suffix = Math.floor(1000 + Math.random() * 9000);
-                return `Guest ${adjective} ${animal} ${suffix}`;
+    databaseHooks: {
+        user: {
+            create: {
+                before: async (user) => {
+                    const isAdmin = ADMIN_EMAILS.includes(user.email.toLowerCase());
+                    return { data: { ...user, role: isAdmin ? "admin" : user.role } };
+                },
             },
-        }),
-    ],
+        },
+    },
 });

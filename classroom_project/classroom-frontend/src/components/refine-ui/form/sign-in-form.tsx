@@ -2,9 +2,7 @@
 
 import { useState } from "react";
 
-import { CircleHelp } from "lucide-react";
-
-import { useLogin, useRefineOptions, useLink } from "@refinedev/core";
+import { useLogin, useRefineOptions } from "@refinedev/core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +13,6 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
-  CardFooter,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { InputPassword } from "@/components/refine-ui/form/input-password";
@@ -25,8 +22,6 @@ export const SignInForm = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  const Link = useLink();
 
   const { title } = useRefineOptions();
 
@@ -39,10 +34,6 @@ export const SignInForm = () => {
       email,
       password,
     });
-  };
-
-  const handleGuestLogin = () => {
-    login({ guest: true });
   };
 
   return (
@@ -112,39 +103,15 @@ export const SignInForm = () => {
               />
             </div>
 
-            <div
-              className={cn(
-                "flex items-center justify-between",
-                "flex-wrap",
-                "gap-2",
-                "mt-4"
-              )}
-            >
-              <div className={cn("flex items-center", "space-x-2")}>
-                <Checkbox
-                  id="remember"
-                  checked={rememberMe}
-                  onCheckedChange={(checked) =>
-                    setRememberMe(checked === "indeterminate" ? false : checked)
-                  }
-                />
-                <Label htmlFor="remember">Remember me</Label>
-              </div>
-              <Link
-                to="/forgot-password"
-                className={cn(
-                  "text-sm",
-                  "flex",
-                  "items-center",
-                  "gap-2",
-                  "text-primary hover:underline",
-                  "text-blue-600",
-                  "dark:text-blue-400"
-                )}
-              >
-                <span>Forgot password</span>
-                <CircleHelp className={cn("w-4", "h-4")} />
-              </Link>
+            <div className={cn("flex items-center", "space-x-2", "mt-4")}>
+              <Checkbox
+                id="remember"
+                checked={rememberMe}
+                onCheckedChange={(checked) =>
+                  setRememberMe(checked === "indeterminate" ? false : checked)
+                }
+              />
+              <Label htmlFor="remember">Remember me</Label>
             </div>
 
             <Button
@@ -156,40 +123,7 @@ export const SignInForm = () => {
               Sign in
             </Button>
           </form>
-
-          <div className={cn("flex", "items-center", "gap-4", "mt-6")}>
-            <Separator className={cn("flex-1")} />
-            <span className={cn("text-sm", "text-muted-foreground")}>or</span>
-            <Separator className={cn("flex-1")} />
-          </div>
-
-          <Button
-            type="button"
-            variant="outline"
-            size="lg"
-            className={cn("w-full", "mt-6")}
-            onClick={handleGuestLogin}
-            disabled={isPending}
-          >
-            Continue as Guest
-          </Button>
         </CardContent>
-
-        <Separator />
-
-        <CardFooter>
-          <p
-            className={cn(
-              "w-full",
-              "text-center",
-              "text-xs",
-              "text-muted-foreground"
-            )}
-          >
-            Guest sessions are temporary and limited - anything you create is
-            removed automatically after a couple of hours.
-          </p>
-        </CardFooter>
       </Card>
     </div>
   );
