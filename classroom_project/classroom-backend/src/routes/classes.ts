@@ -4,6 +4,7 @@ import {classes, classStatusEnum, departments, enrollments, subjects, user} from
 import {and, asc, desc, eq, getTableColumns, ilike, or, sql} from "drizzle-orm";
 import {requireAuth} from "../middleware/authorize.js";
 import workspaceMiddleware from "../middleware/workspace.js";
+import {enforceRowQuota} from "../middleware/rowQuota.js";
 
 const router = express.Router();
 
@@ -28,7 +29,7 @@ const SORTABLE_CLASS_FIELDS = {
 
 router.use(requireAuth, workspaceMiddleware);
 
-router.post('/', async (req, res) => {
+router.post('/', enforceRowQuota(classes, classes.workspaceId, "class"), async (req, res) => {
     try {
         const { name, teacherId, subjectId, capacity, description, status, bannerUrl, bannerCldPubId } = req.body;
 

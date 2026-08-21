@@ -4,6 +4,7 @@ import { departments, subjects } from "../db/schema/index.js";
 import { and, asc, desc, eq, getTableColumns, ilike, or, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/authorize.js";
 import workspaceMiddleware from "../middleware/workspace.js";
+import { enforceRowQuota } from "../middleware/rowQuota.js";
 
 const router = express.Router();
 
@@ -106,7 +107,7 @@ router.get("/:id", async (req, res) => {
     }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", enforceRowQuota(departments, departments.workspaceId, "department"), async (req, res) => {
     try {
         const { name, code, description } = req.body;
 
