@@ -50,15 +50,13 @@ export const authProvider: AuthProvider = {
 
     if (!data?.user) return null;
 
-    const user = data.user as typeof data.user & { role?: string };
-
     return {
-      id: user.id,
-      name: user.name,
-      fullName: user.name,
-      email: user.email,
-      avatar: user.image ?? undefined,
-      role: user.role,
+      id: data.user.id,
+      name: data.user.name,
+      fullName: data.user.name,
+      email: data.user.email,
+      avatar: data.user.image ?? undefined,
+      role: data.user.role,
     };
   },
 };
