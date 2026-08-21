@@ -2,7 +2,8 @@ import express from "express";
 import { db } from "../db/index.js";
 import { departments, subjects } from "../db/schema/index.js";
 import { and, asc, desc, eq, getTableColumns, ilike, or, sql } from "drizzle-orm";
-import { requireAdmin } from "../middleware/authorize.js";
+import { requireAuth } from "../middleware/authorize.js";
+import workspaceMiddleware from "../middleware/workspace.js";
 
 const router = express.Router();
 
@@ -15,6 +16,8 @@ const SORTABLE_DEPARTMENT_FIELDS = {
     code: departments.code,
     createdAt: departments.createdAt,
 } as const;
+
+router.use(requireAuth, workspaceMiddleware);
 
 // Get all departments with optional search, sorting and pagination
 router.get("/", async (req, res) => {
@@ -30,17 +33,17 @@ router.get("/", async (req, res) => {
             ? (sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn))
             : desc(departments.createdAt);
 
-        const filterConditions = [];
+        const filterConditions = [eq(departments.workspaceId, req.workspaceId!)];
         // If search query exists, filter by department name OR code
         if (search) {
             filterConditions.push(
                 or(
                     ilike(departments.name, `%${search}%`),
                     ilike(departments.code, `%${search}%`),
-                )
+                )!
             );
         }
-        const whereClause = filterConditions.length > 0 ? and(...filterConditions) : undefined;
+        const whereClause = and(...filterConditions);
 
         const countResults = await db
             .select({ count: sql<number>`count(*)` })
@@ -86,14 +89,14 @@ router.get("/:id", async (req, res) => {
         const [department] = await db
             .select()
             .from(departments)
-            .where(eq(departments.id, departmentId));
+            .where(and(eq(departments.id, departmentId), eq(departments.workspaceId, req.workspaceId!)));
 
         if (!department) return res.status(404).json({ error: "No department found" });
 
         const departmentSubjects = await db
             .select()
             .from(subjects)
-            .where(eq(subjects.departmentId, departmentId))
+            .where(and(eq(subjects.departmentId, departmentId), eq(subjects.workspaceId, req.workspaceId!)))
             .orderBy(desc(subjects.createdAt));
 
         res.status(200).json({ data: { ...department, subjects: departmentSubjects } });
@@ -103,7 +106,7 @@ router.get("/:id", async (req, res) => {
     }
 });
 
-router.post("/", requireAdmin, async (req, res) => {
+router.post("/", async (req, res) => {
     try {
         const { name, code, description } = req.body;
 
@@ -113,7 +116,7 @@ router.post("/", requireAdmin, async (req, res) => {
 
         const [createdDepartment] = await db
             .insert(departments)
-            .values({ name, code, description })
+            .values({ name, code, description, workspaceId: req.workspaceId! })
             .returning();
 
         res.status(201).json({ data: createdDepartment });
@@ -126,7 +129,7 @@ router.post("/", requireAdmin, async (req, res) => {
     }
 });
 
-router.put("/:id", requireAdmin, async (req, res) => {
+router.put("/:id", async (req, res) => {
     try {
         const departmentId = Number(req.params.id);
         if (!Number.isFinite(departmentId)) return res.status(404).json({ error: "No department found" });
@@ -136,7 +139,7 @@ router.put("/:id", requireAdmin, async (req, res) => {
         const [updatedDepartment] = await db
             .update(departments)
             .set({ name, code, description })
-            .where(eq(departments.id, departmentId))
+            .where(and(eq(departments.id, departmentId), eq(departments.workspaceId, req.workspaceId!)))
             .returning();
 
         if (!updatedDepartment) return res.status(404).json({ error: "No department found" });
@@ -151,14 +154,14 @@ router.put("/:id", requireAdmin, async (req, res) => {
     }
 });
 
-router.delete("/:id", requireAdmin, async (req, res) => {
+router.delete("/:id", async (req, res) => {
     try {
         const departmentId = Number(req.params.id);
         if (!Number.isFinite(departmentId)) return res.status(404).json({ error: "No department found" });
 
         const [deletedDepartment] = await db
             .delete(departments)
-            .where(eq(departments.id, departmentId))
+            .where(and(eq(departments.id, departmentId), eq(departments.workspaceId, req.workspaceId!)))
             .returning({ id: departments.id });
 
         if (!deletedDepartment) return res.status(404).json({ error: "No department found" });

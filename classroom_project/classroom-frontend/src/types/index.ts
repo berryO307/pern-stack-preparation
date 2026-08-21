@@ -142,7 +142,7 @@ export type Enrollment = {
   id: number;
   studentId: string;
   classId: number;
-  createdBy?: string | null;
+  workspaceId?: string;
   student?: User;
   class?: Class;
   createdAt?: string;

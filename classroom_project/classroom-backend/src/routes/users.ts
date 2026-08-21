@@ -1,9 +1,10 @@
-import express from "express";
+import express, { type Request, type Response } from "express";
 import {classes, enrollments, roleEnum, subjects, user} from "../db/schema/index.js";
 import {and, asc, desc, eq, getTableColumns, ilike, or, sql} from "drizzle-orm";
 import {db} from "../db/index.js";
 import {randomUUID} from "crypto";
-import {requireAdmin} from "../middleware/authorize.js";
+import {requireAdmin, requireAuth} from "../middleware/authorize.js";
+import workspaceMiddleware from "../middleware/workspace.js";
 const router = express.Router();
 
 const pgErrorCode = (e: any): string | undefined => e?.code ?? e?.cause?.code;
@@ -84,12 +85,14 @@ router.get("/", async (req, res) => {
     }
 })
 
-// Get a single user, with the classes they teach and/or the classes they're enrolled in
-router.get("/:id", async (req, res) => {
+// Get a single user, with the classes they teach and/or the classes they're enrolled in,
+// scoped to the caller's own workspace since teacher/student fixture identities are
+// shared across every workspace but their classes/enrollments are not.
+router.get("/:id", requireAuth, workspaceMiddleware, async (req: Request, res: Response) => {
     try {
         const userId = req.params.id;
 
-        const [foundUser] = await db.select().from(user).where(eq(user.id, userId));
+        const [foundUser] = await db.select().from(user).where(sql`${user.id} = ${userId}`);
 
         if (!foundUser) return res.status(404).json({ error: "No user found" });
 
@@ -100,7 +103,7 @@ router.get("/:id", async (req, res) => {
             })
             .from(classes)
             .leftJoin(subjects, eq(classes.subjectId, subjects.id))
-            .where(eq(classes.teacherId, userId))
+            .where(sql`${classes.teacherId} = ${userId} AND ${classes.workspaceId} = ${req.workspaceId!}`)
             .orderBy(desc(classes.createdAt));
 
         const enrolledClasses = await db
@@ -110,7 +113,7 @@ router.get("/:id", async (req, res) => {
             })
             .from(enrollments)
             .leftJoin(classes, eq(enrollments.classId, classes.id))
-            .where(eq(enrollments.studentId, userId))
+            .where(sql`${enrollments.studentId} = ${userId} AND ${enrollments.workspaceId} = ${req.workspaceId!}`)
             .orderBy(desc(enrollments.createdAt));
 
         res.status(200).json({ data: { ...foundUser, classesTaught, enrolledClasses } });

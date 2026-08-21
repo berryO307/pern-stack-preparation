@@ -19,11 +19,8 @@ import { Badge } from "@/components/ui/badge.tsx";
 import { Department, Subject } from "@/types";
 import { useDebouncedValue } from "@/hooks/use-debounced-value.ts";
 import { getFilterValue } from "@/lib/filters.ts";
-import { useIsAdmin } from "@/hooks/use-is-admin.ts";
 
 const SubjectsList = () => {
-  const { isAdmin } = useIsAdmin();
-
   const { query: departmentsQuery } = useList<Department>({
     resource: "departments",
     pagination: { pageSize: 100 },
@@ -162,7 +159,7 @@ const SubjectsList = () => {
               </SelectContent>
             </Select>
 
-            {isAdmin && <CreateButton />}
+            <CreateButton />
           </div>
         </div>
       </div>

@@ -27,7 +27,6 @@ type Identity = {
   email: string;
   avatar?: string;
   role?: string;
-  isAnonymous?: boolean;
 };
 
 const getInitials = (name = "") => {

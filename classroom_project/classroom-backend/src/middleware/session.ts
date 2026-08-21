@@ -12,7 +12,6 @@ const sessionMiddleware = async (req: Request, _res: Response, next: NextFunctio
             req.user = {
                 id: session.user.id,
                 role: session.user.role as "admin" | "teacher" | "student",
-                isAnonymous: Boolean((session.user as { isAnonymous?: boolean }).isAnonymous),
             };
         }
     } catch (e) {

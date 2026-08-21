@@ -8,12 +8,13 @@ import classesRouter from "./routes/classes.js";
 import departmentsRouter from "./routes/departments.js";
 import enrollmentsRouter from "./routes/enrollments.js";
 import dashboardRouter from "./routes/dashboard.js";
+import workspaceRouter from "./routes/workspace.js";
 import cors from "cors";
 import securityMiddleware from "./middleware/security.js";
 import sessionMiddleware from "./middleware/session.js";
 import {toNodeHandler} from "better-auth/node";
 import {auth} from "./lib/auth.js";
-import {startGuestCleanupSchedule} from "./lib/cleanup.js";
+import {startWorkspaceCleanupSchedule} from "./lib/cleanup.js";
 
 const app = express();
 const PORT = 8000;
@@ -45,6 +46,7 @@ app.use('/api/classes', classesRouter)
 app.use('/api/departments', departmentsRouter)
 app.use('/api/enrollments', enrollmentsRouter)
 app.use('/api/dashboard', dashboardRouter)
+app.use('/api/demo', workspaceRouter)
 
 app.get("/", (_req, res) => {
   res.send("Classroom backend is up and running!");
@@ -52,5 +54,5 @@ app.get("/", (_req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server listening at http://localhost:${PORT}`);
-  startGuestCleanupSchedule();
+  startWorkspaceCleanupSchedule();
 });
