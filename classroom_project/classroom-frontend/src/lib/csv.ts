@@ -1,6 +1,9 @@
 // Minimal RFC 4180 CSV parser — handles quoted fields, embedded commas/newlines,
 // and "" escaped quotes. No external dependency for a feature this small.
 export function parseCsv(text: string): Record<string, string>[] {
+  // Remove UTF-8 BOM if present
+  const cleanText = text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
@@ -16,9 +19,9 @@ export function parseCsv(text: string): Record<string, string>[] {
     row = [];
   };
 
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    const next = text[i + 1];
+  for (let i = 0; i < cleanText.length; i++) {
+    const char = cleanText[i];
+    const next = cleanText[i + 1];
 
     if (inQuotes) {
       if (char === '"' && next === '"') {

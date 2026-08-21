@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Pie, PieChart, Cell } from "recharts";
+import { useLink } from "@refinedev/core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart.tsx";
@@ -26,6 +27,7 @@ type CapacityDonutChartProps = {
 
 export function CapacityDonutChart({ data, isLoading }: CapacityDonutChartProps) {
   const prefersReducedMotion = usePrefersReducedMotion();
+  const Link = useLink();
 
   const orderedData = useMemo(() => {
     if (!data) return [];
@@ -62,7 +64,7 @@ export function CapacityDonutChart({ data, isLoading }: CapacityDonutChartProps)
               No capacity data yet — set seat counts on your classes to see this breakdown.
             </p>
             <Button variant="outline" size="sm" asChild>
-              <a href="/classes">Go to Classes</a>
+              <Link to="/classes">Go to Classes</Link>
             </Button>
           </div>
         ) : (
@@ -128,7 +130,7 @@ export function CapacityDonutChart({ data, isLoading }: CapacityDonutChartProps)
       {hasData && (
         <CardContent className="pt-0">
           <Button variant="outline" size="sm" asChild>
-            <a href="/classes?sorters[0][field]=fillRate&sorters[0][order]=desc">View full report</a>
+            <Link to="/classes?sorters[0][field]=fillRate&sorters[0][order]=desc">View full report</Link>
           </Button>
         </CardContent>
       )}

@@ -1,5 +1,6 @@
 import { formatDistanceToNow } from "date-fns";
 import { BookOpen, GraduationCap, UserPlus } from "lucide-react";
+import { useLink } from "@refinedev/core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -18,6 +19,7 @@ type RecentActivityProps = {
 
 export function RecentActivity({ activity, isLoading }: RecentActivityProps) {
   const visible = activity.slice(0, 8);
+  const Link = useLink();
 
   return (
     <Card className="shadow-none">
@@ -59,9 +61,9 @@ export function RecentActivity({ activity, isLoading }: RecentActivityProps) {
               })}
             </div>
             <div className="mt-3 border-t pt-3">
-              <a href="/enrollments" className="text-sm font-medium text-primary hover:underline">
+              <Link to="/enrollments" className="text-sm font-medium text-primary hover:underline">
                 View all activity
-              </a>
+              </Link>
             </div>
           </>
         )}

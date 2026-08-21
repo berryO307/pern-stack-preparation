@@ -128,11 +128,14 @@ function transformRow(
   }
 }
 
+const MAX_ROWS = 1000;
+
 export function CsvImportDialog() {
   const [open, setOpen] = useState(false);
   const [entity, setEntity] = useState<EntityKey>("departments");
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [isImporting, setIsImporting] = useState(false);
+  const [fileError, setFileError] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { mutateAsync: create } = useCreate();
@@ -174,17 +177,32 @@ export function CsvImportDialog() {
 
   const resetState = () => {
     setRows([]);
+    setFileError("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const handleFile = async (file: File) => {
-    const text = await file.text();
-    const parsed = parseCsv(text);
-    const nextRows: ParsedRow[] = parsed.map((raw) => {
-      const { values, error } = transformRow(entity, raw, lookups);
-      return { raw, values, error, status: "pending" };
-    });
-    setRows(nextRows);
+    setFileError("");
+    setRows([]);
+
+    try {
+      const text = await file.text();
+      const parsed = parseCsv(text);
+
+      if (parsed.length > MAX_ROWS) {
+        setFileError(`File contains ${parsed.length} rows but the limit is ${MAX_ROWS}. Please split the file and import in smaller batches.`);
+        return;
+      }
+
+      const nextRows: ParsedRow[] = parsed.map((raw) => {
+        const { values, error } = transformRow(entity, raw, lookups);
+        return { raw, values, error, status: "pending" };
+      });
+      setRows(nextRows);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to read or parse CSV file";
+      setFileError(message);
+    }
   };
 
   const validCount = rows.filter((r) => !r.error).length;
@@ -248,7 +266,9 @@ export function CsvImportDialog() {
 
         <div className="space-y-4">
           <div className="grid gap-2">
-            <span className="text-sm font-medium">What are you importing?</span>
+            <label htmlFor="import-entity-select" className="text-sm font-medium">
+              What are you importing?
+            </label>
             <Select
               value={entity}
               onValueChange={(value) => {
@@ -257,7 +277,7 @@ export function CsvImportDialog() {
               }}
               disabled={isImporting}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger id="import-entity-select" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -274,17 +294,27 @@ export function CsvImportDialog() {
           </div>
 
           <div className="grid gap-2">
+            <label htmlFor="import-csv-file" className="text-sm font-medium">
+              Choose CSV file
+            </label>
             <input
+              id="import-csv-file"
               ref={fileInputRef}
               type="file"
               accept=".csv,text/csv"
               disabled={lookupsLoading || isImporting}
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) handleFile(file);
+                if (file) void handleFile(file);
               }}
               className="text-sm file:mr-3 file:rounded-md file:border file:bg-secondary file:px-3 file:py-1.5 file:text-sm file:font-medium disabled:opacity-50"
             />
+            {fileError && (
+              <Alert variant="destructive">
+                <AlertTitle>Unable to read file</AlertTitle>
+                <AlertDescription>{fileError}</AlertDescription>
+              </Alert>
+            )}
           </div>
 
           {rows.length > 0 && (

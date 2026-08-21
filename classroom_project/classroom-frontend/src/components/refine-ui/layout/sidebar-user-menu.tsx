@@ -12,9 +12,12 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu.tsx";
 import { useSidebar } from "@/components/ui/sidebar.tsx";
 import { useTheme } from "@/components/refine-ui/theme/theme-provider.tsx";
+import { endRumSession } from "@/lib/rum.ts";
 import { cn } from "@/lib/utils.ts";
 
 type Identity = {
@@ -87,21 +90,26 @@ export function SidebarUserMenu() {
           <p className="truncate text-xs text-muted-foreground">{identity.email}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => setTheme("light")}>
-          <Sun className={cn(theme === "light" && "text-primary")} />
-          <span>Light</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")}>
-          <Moon className={cn(theme === "dark" && "text-primary")} />
-          <span>Dark</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")}>
-          <Monitor className={cn(theme === "system" && "text-primary")} />
-          <span>System</span>
-        </DropdownMenuItem>
+        <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>
+          <DropdownMenuRadioItem value="light">
+            <Sun />
+            <span>Light</span>
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark">
+            <Moon />
+            <span>Dark</span>
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="system">
+            <Monitor />
+            <span>System</span>
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          onClick={() => logout()}
+          onClick={() => {
+            endRumSession();
+            logout();
+          }}
           disabled={isLoggingOut}
           aria-label="Sign out"
         >

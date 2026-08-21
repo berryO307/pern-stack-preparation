@@ -41,6 +41,7 @@ const EnrollmentForm = () => {
   const {
     handleSubmit,
     control,
+    setError,
     refineCore: { onFinish, formLoading },
   } = form;
 
@@ -63,7 +64,8 @@ const EnrollmentForm = () => {
     try {
       await onFinish(values);
     } catch (error) {
-      console.error("Error creating enrollment:", error);
+      const message = error instanceof Error ? error.message : "Failed to create enrollment";
+      setError("root", { type: "manual", message });
     }
   };
 
@@ -81,6 +83,11 @@ const EnrollmentForm = () => {
         <CardContent className="mt-7">
           <Form {...form}>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+              {form.formState.errors.root && (
+                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                  {form.formState.errors.root.message}
+                </div>
+              )}
               <FormField
                 control={control}
                 name="studentId"

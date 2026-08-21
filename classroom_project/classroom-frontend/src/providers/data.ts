@@ -116,11 +116,11 @@ const options: CreateDataProviderOptions = {
     mapResponse: async (response) => {
       const json: GetOneResponse = await response.json();
 
-      // @refinedev/rest's UpdateParams typing requires a guaranteed object
-      // here (unlike deleteOne, which explicitly allows undefined) — an
-      // update response missing `data` is a backend contract violation, not
-      // something worth widening this type for.
-      return json.data ?? {};
+      if (json.data == null) {
+        throw new Error("Update response missing data field");
+      }
+
+      return json.data;
     },
 
     transformError: async (response) => {
@@ -163,8 +163,11 @@ const options: CreateDataProviderOptions = {
     mapResponse: async (response) => {
       const json: GetOneResponse = await response.json();
 
-      // Same AnyObject (not | undefined) contract as `update` above.
-      return json.data ?? {};
+      if (json.data == null) {
+        throw new Error("Custom response missing data field");
+      }
+
+      return json.data;
     },
 
     transformError: async (response) => {

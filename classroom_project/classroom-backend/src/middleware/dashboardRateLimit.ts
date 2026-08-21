@@ -3,17 +3,6 @@ import type { ArcjetNodeRequest } from "@arcjet/node";
 import { tokenBucket } from "@arcjet/node";
 import aj from "../config/arcjet.js";
 
-// Known synthetic-monitoring callers that should never be rate limited or
-// bot-blocked: Site24x7's RUM/uptime agents and Railway's platform health
-// checker. Matched on User-Agent since neither documents a stable header we
-// can assert on more precisely from this side.
-const MONITORING_USER_AGENT_PATTERNS = [/site24x7/i, /railway/i];
-
-const isMonitoringRequest = (req: Request): boolean => {
-    const userAgent = req.headers["user-agent"] ?? "";
-    return MONITORING_USER_AGENT_PATTERNS.some((pattern) => pattern.test(userAgent));
-};
-
 // Dashboard-summary-specific limit, keyed on the authenticated user (falling
 // back to IP for the rare unauthenticated case) rather than the blanket
 // per-role limit in security.ts — this query is heavier than a typical list
@@ -31,7 +20,6 @@ const dashboardSummaryClient = aj.withRule(
 );
 
 const dashboardRateLimit = async (req: Request, res: Response, next: NextFunction) => {
-    if (isMonitoringRequest(req)) return next();
 
     try {
         const userId = req.user?.id ?? req.ip ?? "anonymous";

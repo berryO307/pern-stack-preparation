@@ -1,5 +1,5 @@
 import { ListView } from "@/components/refine-ui/views/list-view.tsx";
-import { Breadcrumb } from "@/components/ui/breadcrumb.tsx";
+import { Breadcrumb } from "@/components/refine-ui/layout/breadcrumb.tsx";
 import { Search, UserPlus } from "lucide-react";
 import { Input } from "@/components/ui/input.tsx";
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -123,6 +123,13 @@ const EnrollmentsList = () => {
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch]);
+
+  // Keeps the search control in sync when `filters` changes from
+  // outside this component's own debounced push above — browser back/forward
+  // navigation, or an external link landing on this page with a filter set.
+  useEffect(() => {
+    setSearchQuery(getFilterValue(filters, "search"));
+  }, [filters]);
 
   return (
     <ListView>

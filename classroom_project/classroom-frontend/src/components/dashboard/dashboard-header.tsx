@@ -24,7 +24,7 @@ export function DashboardHeader() {
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        {isLoading || !firstName ? (
+        {isLoading ? (
           <>
             <Skeleton className="h-9 w-64" />
             <Skeleton className="mt-2 h-4 w-80" />
@@ -32,7 +32,7 @@ export function DashboardHeader() {
         ) : (
           <>
             <h1 className="text-3xl font-semibold tracking-tight">
-              Welcome back, {firstName}
+              Welcome back{firstName ? `, ${firstName}` : ""}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Track, manage and forecast departments, classes and enrollments.

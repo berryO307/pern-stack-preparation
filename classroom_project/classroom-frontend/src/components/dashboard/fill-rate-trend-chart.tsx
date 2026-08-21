@@ -53,14 +53,17 @@ export function FillRateTrendChart({
   const departments = departmentsQuery.data?.data ?? [];
   const selectedDepartmentName = departments.find((d) => d.id === selectedDepartmentId)?.name;
 
-  const chartData = useMemo(
-    () =>
-      (data ?? []).map((point) => ({
-        ...point,
-        monthLabel: formatMonthLabel(point.month),
-      })),
-    [data],
-  );
+  const chartData = useMemo(() => {
+    if (!data || data.length === 0) return [];
+
+    const years = new Set(data.map((point) => point.month.split("-")[0]));
+    const spansYears = years.size > 1;
+
+    return data.map((point) => ({
+      ...point,
+      monthLabel: formatMonthLabel(point.month, spansYears),
+    }));
+  }, [data]);
 
   const ariaLabel = chartData.length
     ? `Average class fill rate by month, ${chartData[0]?.monthLabel} through ${chartData[chartData.length - 1]?.monthLabel}: ${chartData
@@ -80,30 +83,30 @@ export function FillRateTrendChart({
             Compare a department against the institution average.
           </p>
         </div>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Select
-                value={selectedDepartmentId?.toString()}
-                onValueChange={(value) => onDepartmentChange(Number(value))}
-              >
+        <Select
+          value={selectedDepartmentId?.toString()}
+          onValueChange={(value) => onDepartmentChange(Number(value))}
+        >
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <SelectTrigger className="w-44" size="sm">
                   <SelectValue placeholder="Department" className="truncate" />
                 </SelectTrigger>
-                <SelectContent>
-                  {departments.map((department) => (
-                    <SelectItem key={department.id} value={department.id.toString()}>
-                      <span className="truncate">{department.name}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </TooltipTrigger>
-            {selectedDepartmentName && (
-              <TooltipContent>{selectedDepartmentName}</TooltipContent>
-            )}
-          </Tooltip>
-        </TooltipProvider>
+              </TooltipTrigger>
+              {selectedDepartmentName && (
+                <TooltipContent>{selectedDepartmentName}</TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
+          <SelectContent>
+            {departments.map((department) => (
+              <SelectItem key={department.id} value={department.id.toString()}>
+                <span className="truncate">{department.name}</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -196,10 +199,13 @@ export function FillRateTrendChart({
   );
 }
 
-function formatMonthLabel(month: string) {
+function formatMonthLabel(month: string, includeYear: boolean) {
   const [year, monthNum] = month.split("-");
   const date = new Date(Number(year), Number(monthNum) - 1, 1);
-  return date.toLocaleDateString("en-US", { month: "short" });
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    ...(includeYear && { year: "numeric" })
+  });
 }
 
 FillRateTrendChart.displayName = "FillRateTrendChart";

@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, Minus, MoreVertical, RefreshCw } from "lucide-react";
+import { useLink } from "@refinedev/core";
 import { Card, CardContent } from "@/components/ui/card.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -21,6 +22,8 @@ type KpiCardProps = {
 };
 
 export function KpiCard({ label, kpi, isLoading, isError, onRetry, viewAllHref }: KpiCardProps) {
+  const Link = useLink();
+
   return (
     <Card className="shadow-none">
       <CardContent className="py-2">
@@ -39,7 +42,7 @@ export function KpiCard({ label, kpi, isLoading, isError, onRetry, viewAllHref }
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem asChild>
-                <a href={viewAllHref}>View all</a>
+                <Link to={viewAllHref}>View all</Link>
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {
@@ -50,8 +53,10 @@ export function KpiCard({ label, kpi, isLoading, isError, onRetry, viewAllHref }
                   const a = document.createElement("a");
                   a.href = url;
                   a.download = `${label.toLowerCase()}.csv`;
+                  document.body.appendChild(a);
                   a.click();
-                  URL.revokeObjectURL(url);
+                  document.body.removeChild(a);
+                  setTimeout(() => URL.revokeObjectURL(url), 100);
                 }}
                 disabled={!kpi}
               >

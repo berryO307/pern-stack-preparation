@@ -37,7 +37,8 @@ export const CommandSearch = () => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query, 250);
-  const enabled = debouncedQuery.trim().length >= MIN_QUERY_LENGTH;
+  const trimmedQuery = debouncedQuery.trim();
+  const enabled = trimmedQuery.length >= MIN_QUERY_LENGTH;
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -56,25 +57,25 @@ export const CommandSearch = () => {
 
   const { query: departmentsQuery } = useList<Department>({
     resource: "departments",
-    filters: [{ field: "name", operator: "contains", value: debouncedQuery }],
+    filters: [{ field: "name", operator: "contains", value: trimmedQuery }],
     pagination: { pageSize: 5 },
     queryOptions: { enabled },
   });
   const { query: subjectsQuery } = useList<Subject>({
     resource: "subjects",
-    filters: [{ field: "name", operator: "contains", value: debouncedQuery }],
+    filters: [{ field: "name", operator: "contains", value: trimmedQuery }],
     pagination: { pageSize: 5 },
     queryOptions: { enabled },
   });
   const { query: classesQuery } = useList<Class>({
     resource: "classes",
-    filters: [{ field: "name", operator: "contains", value: debouncedQuery }],
+    filters: [{ field: "name", operator: "contains", value: trimmedQuery }],
     pagination: { pageSize: 5 },
     queryOptions: { enabled },
   });
   const { query: usersQuery } = useList<User>({
     resource: "users",
-    filters: [{ field: "name", operator: "contains", value: debouncedQuery }],
+    filters: [{ field: "name", operator: "contains", value: trimmedQuery }],
     pagination: { pageSize: 5 },
     queryOptions: { enabled },
   });
@@ -124,13 +125,13 @@ export const CommandSearch = () => {
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogHeader className="sr-only">
-          <DialogTitle>Search</DialogTitle>
-          <DialogDescription>
-            Search departments, subjects, classes and users
-          </DialogDescription>
-        </DialogHeader>
         <DialogContent className="overflow-hidden p-0" showCloseButton={false}>
+          <DialogHeader className="sr-only">
+            <DialogTitle>Search</DialogTitle>
+            <DialogDescription>
+              Search departments, subjects, classes and users
+            </DialogDescription>
+          </DialogHeader>
           <Command
             shouldFilter={false}
             className="[&_[cmdk-group-heading]]:text-muted-foreground **:data-[slot=command-input-wrapper]:h-12 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]]:px-2 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3"
@@ -148,7 +149,7 @@ export const CommandSearch = () => {
                 </div>
               )}
               {enabled && !isLoading && !hasResults && (
-                <CommandEmpty>No results for &quot;{debouncedQuery}&quot;</CommandEmpty>
+                <CommandEmpty>No results for &quot;{trimmedQuery}&quot;</CommandEmpty>
               )}
               {!enabled && (
                 <div className="py-6 text-center text-sm text-muted-foreground">

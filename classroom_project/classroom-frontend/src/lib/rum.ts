@@ -14,6 +14,10 @@ export function setRumUserId(userId: string) {
   window.s247r?.("userId", userId);
 }
 
+export function endRumSession() {
+  window.s247r?.("endSession");
+}
+
 export function reportRumError(message: string) {
   window.s247r?.("captureException", new Error(message));
 }

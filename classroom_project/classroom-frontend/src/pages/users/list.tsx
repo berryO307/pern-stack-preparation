@@ -171,8 +171,7 @@ const UsersList = ({ title = "Users", defaultRole = "all" }: UsersListProps = {}
   // this page with a filter already set.
   useEffect(() => {
     setSearchQuery(getFilterValue(filters, "name"));
-    setSelectedRole(getFilterValue(filters, "role") || defaultRole);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setSelectedRole(getFilterValue(filters, "role") || "all");
   }, [filters]);
 
   return (
