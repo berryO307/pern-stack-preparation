@@ -5,6 +5,7 @@ export type Workspace = {
   id: string;
   expiresAt: string;
   isPermanent: boolean;
+  wasJustProvisioned: boolean;
 };
 
 // POST /api/demo/workspace is idempotent - returns the caller's existing

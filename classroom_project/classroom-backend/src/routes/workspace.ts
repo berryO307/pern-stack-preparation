@@ -18,6 +18,7 @@ router.post("/workspace", requireAuth, workspaceProvisionRateLimit, async (req, 
                 id: workspace.id,
                 expiresAt: workspace.expiresAt,
                 isPermanent: workspace.isPermanent,
+                wasJustProvisioned: workspace.wasJustProvisioned,
             },
         });
     } catch (e) {

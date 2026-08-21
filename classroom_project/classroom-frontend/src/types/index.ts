@@ -52,8 +52,16 @@ declare global {
       ) => CloudinaryWidget;
     };
     // Site24x7 RUM beacon command queue (loaded async in index.html). Real,
-    // documented methods only — see lib/rum.ts for why this is a short list.
-    s247r?: (command: "userId" | "captureException", value: string | Error) => void;
+    // documented methods only — see lib/rum.ts for why this is a short list
+    // (and for why "addEvent"/"trackEvents" are here despite being missing
+    // from the primary API reference page).
+    s247r?: {
+      (command: "userId", value: string): void;
+      (command: "captureException", value: Error): void;
+      (command: "endCurrentSession"): void;
+      (command: "trackEvents", value: boolean): void;
+      (command: "addEvent", value: string): void;
+    };
   }
 }
 

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useInvalidate } from "@refinedev/core";
 import { Clock } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/hooks/use-workspace";
+import { trackRumEvent } from "@/lib/rum";
 
 const URGENT_THRESHOLD_MS = 5 * 60 * 1000;
 
@@ -21,6 +22,7 @@ export function WorkspaceBanner() {
   const invalidate = useInvalidate();
   const [now, setNow] = useState(() => Date.now());
   const [resetting, setResetting] = useState(false);
+  const trackedProvisionedId = useRef<string | null>(null);
 
   const workspace = data?.data;
 
@@ -28,6 +30,20 @@ export function WorkspaceBanner() {
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // wasJustProvisioned stays true on every cached re-render of the same
+  // response, not just the first one - track which workspace id it's
+  // already been reported for so this fires once per real provision, not
+  // once per render.
+  useEffect(() => {
+    if (
+      workspace?.wasJustProvisioned &&
+      trackedProvisionedId.current !== workspace.id
+    ) {
+      trackedProvisionedId.current = workspace.id;
+      trackRumEvent("workspace_provisioned");
+    }
+  }, [workspace]);
 
   const remainingMs = workspace ? new Date(workspace.expiresAt).getTime() - now : null;
 
@@ -38,6 +54,7 @@ export function WorkspaceBanner() {
   useEffect(() => {
     if (remainingMs !== null && remainingMs <= 0 && !resetting) {
       setResetting(true);
+      trackRumEvent("workspace_reset");
       Promise.all([refetch(), invalidate({ invalidates: ["all"] })]).finally(() => {
         setResetting(false);
       });
