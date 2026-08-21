@@ -9,8 +9,6 @@ import routerProvider, {
   DocumentTitleHandler,
 } from "@refinedev/react-router";
 import { Login } from "./pages/login";
-import { ForgotPassword } from "./pages/forgot-password";
-import { ResetPassword } from "./pages/reset-password";
 import { ErrorComponent } from "./components/refine-ui/layout/error-component";
 import { Layout } from "./components/refine-ui/layout/layout";
 import { Header } from "./components/refine-ui/layout/header";
@@ -161,8 +159,6 @@ function App() {
                 }
               >
                 <Route path="/login" element={<Login />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/reset-password" element={<ResetPassword />} />
               </Route>
 
               <Route

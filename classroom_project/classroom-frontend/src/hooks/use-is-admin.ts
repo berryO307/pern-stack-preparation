@@ -2,7 +2,6 @@ import { useGetIdentity } from "@refinedev/core";
 
 type Identity = {
   role?: string;
-  isAnonymous?: boolean;
 };
 
 export function useIsAdmin() {
