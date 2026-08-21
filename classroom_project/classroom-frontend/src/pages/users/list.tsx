@@ -154,6 +154,16 @@ const UsersList = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, selectedRole]);
 
+  // Keeps the search/role controls in sync when `filters` changes from
+  // outside this component's own debounced push above — browser back/forward
+  // navigation, or an external link (e.g. a dashboard KPI card) landing on
+  // this page with a filter already set.
+  useEffect(() => {
+    setSearchQuery(getFilterValue(filters, "name"));
+    setSelectedRole(getFilterValue(filters, "role") || "all");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
+
   return (
     <ListView>
       <Breadcrumb />

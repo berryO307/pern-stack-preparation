@@ -132,7 +132,14 @@ const options: CreateDataProviderOptions = {
   deleteOne: {
     getEndpoint: ({ resource, id }) => `${resource}/${id}`,
 
-    mapResponse: async () => undefined,
+    // The backend returns `{ data: { id } }` on delete — return it rather than
+    // undefined so callers relying on the mutation result (optimistic UI,
+    // onSuccess handlers reading the deleted id) actually get it.
+    mapResponse: async (response) => {
+      const json: GetOneResponse<Record<string, unknown>> = await response.json();
+
+      return json.data;
+    },
 
     transformError: async (response) => {
       const body = await response
@@ -155,6 +162,13 @@ const options: CreateDataProviderOptions = {
   },
 };
 
-const { dataProvider } = createDataProvider(BACKEND_BASE_URL, options);
+// `ky` (the fetch wrapper createDataProvider uses under the hood) defaults to
+// `credentials: "same-origin"`, so without this every mutation silently drops
+// the session cookie on the frontend->backend cross-origin request and 401s
+// on any auth-gated route — reads worked and masked this since GET endpoints
+// don't require a session.
+const { dataProvider } = createDataProvider(BACKEND_BASE_URL, options, {
+  credentials: "include",
+});
 
 export { dataProvider };

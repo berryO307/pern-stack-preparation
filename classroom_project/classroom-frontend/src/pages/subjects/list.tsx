@@ -110,6 +110,15 @@ const SubjectsList = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, selectedDepartment]);
 
+  // Keeps the search/department controls in sync when `filters` changes from
+  // outside this component's own debounced push above — browser back/forward
+  // navigation, or an external link landing on this page with a filter set.
+  useEffect(() => {
+    setSearchQuery(getFilterValue(filters, "name"));
+    setSelectedDepartment(getFilterValue(filters, "department") || "all");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
+
   return (
     <ListView>
       <Breadcrumb />
