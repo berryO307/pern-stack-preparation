@@ -30,7 +30,12 @@ const ROLE_BADGE_VARIANT: Record<string, "default" | "secondary" | "outline"> = 
   student: "outline",
 };
 
-const UsersList = () => {
+type UsersListProps = {
+  title?: string;
+  defaultRole?: string;
+};
+
+const UsersList = ({ title = "Users", defaultRole = "all" }: UsersListProps = {}) => {
   const { isAdmin } = useIsAdmin();
 
   const UsersTable = useTable<User>({
@@ -123,6 +128,10 @@ const UsersList = () => {
       pagination: { pageSize: 10, mode: "server" },
       filters: {
         defaultBehavior: "replace",
+        initial:
+          defaultRole !== "all"
+            ? [{ field: "role", operator: "eq", value: defaultRole }]
+            : [],
       },
       sorters: {
         initial: [{ field: "createdAt", order: "desc" }],
@@ -134,7 +143,9 @@ const UsersList = () => {
   const { filters, setFilters } = UsersTable.refineCore;
 
   const [searchQuery, setSearchQuery] = useState(() => getFilterValue(filters, "name"));
-  const [selectedRole, setSelectedRole] = useState(() => getFilterValue(filters, "role") || "all");
+  const [selectedRole, setSelectedRole] = useState(
+    () => getFilterValue(filters, "role") || defaultRole,
+  );
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
 
   const isFirstRender = useRef(true);
@@ -161,14 +172,13 @@ const UsersList = () => {
   useEffect(() => {
     setSearchQuery(getFilterValue(filters, "name"));
     setSelectedRole(getFilterValue(filters, "role") || "all");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
   return (
     <ListView>
       <Breadcrumb />
 
-      <h1 className="page-title">Users</h1>
+      <h1 className="page-title">{title}</h1>
 
       <div className="intro-row">
         <p>Quick access to essential metrics and management tools.</p>

@@ -23,7 +23,10 @@ export const user = pgTable('user', {
     // enrollments/users, enforced as a quota for non-admin accounts.
     writeCount: integer('write_count').notNull().default(0),
     ...timestamps
-});
+}, (table) => [
+    index('user_created_at_idx').on(table.createdAt),
+    index('user_role_idx').on(table.role),
+]);
 
 export const session = pgTable('session', {
     id: text('id').primaryKey(),

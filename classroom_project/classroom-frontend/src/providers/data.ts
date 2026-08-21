@@ -19,7 +19,8 @@ const options: CreateDataProviderOptions = {
       if (
         (resource === "classes" ||
           resource === "departments" ||
-          resource === "users") &&
+          resource === "users" ||
+          resource === "enrollments") &&
         sorters?.[0]
       ) {
         params.sortField = sorters[0].field;
@@ -55,6 +56,7 @@ const options: CreateDataProviderOptions = {
         if (resource === "enrollments") {
           if (field === "classId") params.classId = value;
           if (field === "studentId") params.studentId = value;
+          if (field === "search") params.search = value;
         }
       });
 
@@ -114,7 +116,11 @@ const options: CreateDataProviderOptions = {
     mapResponse: async (response) => {
       const json: GetOneResponse = await response.json();
 
-      return json.data ?? {};
+      if (json.data == null) {
+        throw new Error("Update response missing data field");
+      }
+
+      return json.data;
     },
 
     transformError: async (response) => {
@@ -157,7 +163,22 @@ const options: CreateDataProviderOptions = {
     mapResponse: async (response) => {
       const json: GetOneResponse = await response.json();
 
-      return json.data ?? {};
+      if (json.data == null) {
+        throw new Error("Custom response missing data field");
+      }
+
+      return json.data;
+    },
+
+    transformError: async (response) => {
+      const body = await response
+        .json<{ error?: string; message?: string }>()
+        .catch(() => ({}) as { error?: string; message?: string });
+
+      return {
+        message: body.message ?? body.error ?? "Request failed",
+        statusCode: response.status,
+      };
     },
   },
 };
