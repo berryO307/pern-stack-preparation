@@ -179,6 +179,18 @@ const ClassesList = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, selectedSubject, selectedTeacher, selectedStatus]);
 
+  // Keeps the search/filter controls in sync when `filters` changes from
+  // outside this component's own debounced push above — browser back/forward
+  // navigation, or an external link (e.g. the dashboard's "View full report")
+  // landing on this page with a filter/sort already set.
+  useEffect(() => {
+    setSearchQuery(getFilterValue(filters, "name"));
+    setSelectedSubject(getFilterValue(filters, "subject") || "all");
+    setSelectedTeacher(getFilterValue(filters, "teacher") || "all");
+    setSelectedStatus(getFilterValue(filters, "status") || "all");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
+
   return (
     <ListView>
       <Breadcrumb />

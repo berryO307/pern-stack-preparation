@@ -42,6 +42,11 @@ const Show = () => {
   const { query: enrollmentsQuery } = useList<Enrollment>({
     resource: "enrollments",
     filters: [{ field: "classId", operator: "eq", value: classId }],
+    // Matches the studentsQuery cap below — without this the roster (and the
+    // "Enrolled Students (N)" count derived from it) silently truncates at
+    // the default page size of 10, diverging from the accurate server-side
+    // enrolledCount shown in the capacity badge above.
+    pagination: { pageSize: 100 },
     queryOptions: { enabled: !!classId },
   });
 
@@ -230,16 +235,23 @@ const Show = () => {
                 />
               </SelectTrigger>
               <SelectContent>
-                {availableStudents.map((student) => (
-                  <SelectItem key={student.id} value={student.id}>
-                    {student.name} ({student.email})
+                {availableStudents.length === 0 ? (
+                  <SelectItem value="__none" disabled>
+                    No students available to enroll
                   </SelectItem>
-                ))}
+                ) : (
+                  availableStudents.map((student) => (
+                    <SelectItem key={student.id} value={student.id}>
+                      {student.name} ({student.email})
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
             <Button
               onClick={handleEnroll}
               disabled={!selectedStudentId || isFull || enrollMutation.isPending}
+              aria-label={enrollMutation.isPending ? "Enrolling..." : undefined}
             >
               {enrollMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -277,6 +289,7 @@ const Show = () => {
                     size="sm"
                     disabled={unenrollingId === enrollment.id}
                     onClick={() => handleUnenroll(enrollment.id)}
+                    aria-label={unenrollingId === enrollment.id ? "Unenrolling..." : undefined}
                   >
                     {unenrollingId === enrollment.id ? (
                       <Loader2 className="h-4 w-4 animate-spin" />

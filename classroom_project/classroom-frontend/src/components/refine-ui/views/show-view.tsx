@@ -30,6 +30,13 @@ type ShowViewHeaderProps = PropsWithChildren<{
   title?: string;
   wrapperClassName?: string;
   headerClassName?: string;
+  /**
+   * This app has no Refine accessControlProvider — every other Edit/Delete
+   * gate here is a manual `useIsAdmin()` check, so EditButton has no role
+   * awareness of its own and shows for anyone by default. Pass `true` on
+   * pages non-admins can view but not edit.
+   */
+  hideEdit?: boolean;
 }>;
 
 export const ShowViewHeader = ({
@@ -37,6 +44,7 @@ export const ShowViewHeader = ({
   title: titleFromProps,
   wrapperClassName,
   headerClassName,
+  hideEdit,
 }: ShowViewHeaderProps) => {
   const back = useBack();
 
@@ -87,11 +95,13 @@ export const ShowViewHeader = ({
             recordItemId={recordItemId}
             resource={resourceName}
           />
-          <EditButton
-            variant="outline"
-            recordItemId={recordItemId}
-            resource={resourceName}
-          />
+          {!hideEdit && (
+            <EditButton
+              variant="outline"
+              recordItemId={recordItemId}
+              resource={resourceName}
+            />
+          )}
         </div>
       </div>
     </div>

@@ -7,10 +7,11 @@ import {
 import { Card } from "@/components/ui/card.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Separator } from "@/components/ui/separator.tsx";
-import { ShowButton } from "@/components/refine-ui/buttons/show.tsx";
+import { useIsAdmin } from "@/hooks/use-is-admin.ts";
 
 const Show = () => {
   const { query } = useShow<Department>({ resource: "departments" });
+  const { isAdmin } = useIsAdmin();
 
   const department = query.data?.data;
   const { isLoading, isError } = query;
@@ -18,7 +19,7 @@ const Show = () => {
   if (isLoading || isError || !department) {
     return (
       <ShowView className="class-view class-show">
-        <ShowViewHeader resource="departments" title="department details" />
+        <ShowViewHeader resource="departments" title="department details" hideEdit={!isAdmin} />
 
         <p className="state-message">
           {isLoading
@@ -35,7 +36,7 @@ const Show = () => {
 
   return (
     <ShowView className="class-view class-show">
-      <ShowViewHeader resource="departments" title="department details" />
+      <ShowViewHeader resource="departments" title="department details" hideEdit={!isAdmin} />
 
       <Card className="details-card">
         <div className="details-header">
@@ -75,14 +76,6 @@ const Show = () => {
                       </p>
                     )}
                   </div>
-                  <ShowButton
-                    resource="subjects"
-                    recordItemId={subject.id}
-                    variant="outline"
-                    size="sm"
-                  >
-                    View
-                  </ShowButton>
                 </div>
               ))}
             </div>
