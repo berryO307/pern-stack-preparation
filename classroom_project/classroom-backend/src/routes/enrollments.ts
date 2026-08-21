@@ -5,6 +5,7 @@ import { and, asc, desc, eq, getTableColumns, ilike, or, sql } from "drizzle-orm
 import { requireAuth } from "../middleware/authorize.js";
 import workspaceMiddleware from "../middleware/workspace.js";
 import { enforceRowQuota } from "../middleware/rowQuota.js";
+import domainWriteRateLimit from "../middleware/domainWriteRateLimit.js";
 
 const router = express.Router();
 
@@ -97,7 +98,7 @@ router.get("/", async (req, res) => {
     }
 });
 
-router.post("/", enforceRowQuota(enrollments, enrollments.workspaceId, "enrollment"), async (req, res) => {
+router.post("/", domainWriteRateLimit, enforceRowQuota(enrollments, enrollments.workspaceId, "enrollment"), async (req, res) => {
     try {
         const { classId: rawClassId, studentId } = req.body;
         const classId = Number(rawClassId);
@@ -146,7 +147,7 @@ router.post("/", enforceRowQuota(enrollments, enrollments.workspaceId, "enrollme
     }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", domainWriteRateLimit, async (req, res) => {
     try {
         const enrollmentId = Number(req.params.id);
         if (!Number.isFinite(enrollmentId)) return res.status(404).json({ error: "No enrollment found" });
