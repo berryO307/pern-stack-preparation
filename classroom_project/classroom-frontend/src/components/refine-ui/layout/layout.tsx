@@ -1,6 +1,7 @@
 "use client";
 
 import { Header } from "@/components/refine-ui/layout/header";
+import { RumIdentityTracker } from "@/components/refine-ui/layout/rum-identity-tracker";
 import { ThemeProvider } from "@/components/refine-ui/theme/theme-provider";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
@@ -11,6 +12,7 @@ export function Layout({ children }: PropsWithChildren) {
   return (
     <ThemeProvider>
       <SidebarProvider>
+        <RumIdentityTracker />
         <Sidebar />
         <SidebarInset>
           <Header />
