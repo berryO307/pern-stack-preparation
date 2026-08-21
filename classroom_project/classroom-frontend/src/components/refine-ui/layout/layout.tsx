@@ -2,6 +2,7 @@
 
 import { Header } from "@/components/refine-ui/layout/header";
 import { RumIdentityTracker } from "@/components/refine-ui/layout/rum-identity-tracker";
+import { WorkspaceBanner } from "@/components/refine-ui/layout/workspace-banner";
 import { ThemeProvider } from "@/components/refine-ui/theme/theme-provider";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,7 @@ export function Layout({ children }: PropsWithChildren) {
         <RumIdentityTracker />
         <Sidebar />
         <SidebarInset>
+          <WorkspaceBanner />
           <Header />
           <main
             className={cn(

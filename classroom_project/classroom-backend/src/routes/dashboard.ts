@@ -2,6 +2,8 @@ import express from "express";
 import { db } from "../db/index.js";
 import { sql } from "drizzle-orm";
 import dashboardRateLimit from "../middleware/dashboardRateLimit.js";
+import { requireAuth } from "../middleware/authorize.js";
+import workspaceMiddleware from "../middleware/workspace.js";
 
 const router = express.Router();
 
@@ -23,7 +25,14 @@ type DashboardSummary = {
     recentActivity: { id: string; type: "enrollment" | "class" | "user"; actor: string; message: string; at: string }[];
 };
 
-const runSummaryQuery = async (tz: string, departmentId: number | null) => {
+// Every CTE here is scoped to the caller's own workspace via workspaceId - a
+// visitor's dashboard must only ever reflect their own sandboxed data, never
+// another workspace's. `user` itself stays unscoped (it's shared/global
+// identity, not workspace data) - "students"/"faculty" are counted as
+// distinct people enrolled in / teaching this workspace's classes, not as
+// raw `user` row counts, since fixture identities are reused across every
+// workspace and were never "created" per-workspace to begin with.
+const runSummaryQuery = async (tz: string, departmentId: number | null, workspaceId: string) => {
     const result = await db.execute<{ result: DashboardSummary }>(sql`
         WITH bounds AS (
             SELECT
@@ -40,30 +49,39 @@ const runSummaryQuery = async (tz: string, departmentId: number | null) => {
                     ) AT TIME ZONE ${tz} AT TIME ZONE 'UTC'
                 ) AS prev_end
         ),
-        user_counts AS (
+        student_counts AS (
             SELECT
-                count(*) FILTER (WHERE role = 'student' AND created_at >= b.cur_start AND created_at < b.cur_end) AS students_current,
-                count(*) FILTER (WHERE role = 'student' AND created_at >= b.prev_start AND created_at < b.prev_end) AS students_previous,
-                count(*) FILTER (WHERE role = 'teacher' AND created_at >= b.cur_start AND created_at < b.cur_end) AS faculty_current,
-                count(*) FILTER (WHERE role = 'teacher' AND created_at >= b.prev_start AND created_at < b.prev_end) AS faculty_previous
-            FROM "user", bounds b
+                count(DISTINCT student_id) FILTER (WHERE created_at >= b.cur_start AND created_at < b.cur_end) AS students_current,
+                count(DISTINCT student_id) FILTER (WHERE created_at >= b.prev_start AND created_at < b.prev_end) AS students_previous
+            FROM enrollments, bounds b
+            WHERE workspace_id = ${workspaceId}
+        ),
+        faculty_counts AS (
+            SELECT
+                count(DISTINCT teacher_id) FILTER (WHERE created_at >= b.cur_start AND created_at < b.cur_end) AS faculty_current,
+                count(DISTINCT teacher_id) FILTER (WHERE created_at >= b.prev_start AND created_at < b.prev_end) AS faculty_previous
+            FROM classes, bounds b
+            WHERE workspace_id = ${workspaceId}
         ),
         class_counts AS (
             SELECT
                 count(*) FILTER (WHERE created_at >= b.cur_start AND created_at < b.cur_end) AS classes_current,
                 count(*) FILTER (WHERE created_at >= b.prev_start AND created_at < b.prev_end) AS classes_previous
             FROM classes, bounds b
+            WHERE workspace_id = ${workspaceId}
         ),
         subject_counts AS (
             SELECT
                 count(*) FILTER (WHERE created_at >= b.cur_start AND created_at < b.cur_end) AS subjects_current,
                 count(*) FILTER (WHERE created_at >= b.prev_start AND created_at < b.prev_end) AS subjects_previous
             FROM subjects, bounds b
+            WHERE workspace_id = ${workspaceId}
         ),
         class_ratios AS (
             SELECT c.id, c.capacity, count(e.id) AS enrolled
             FROM classes c
             LEFT JOIN enrollments e ON e.class_id = c.id
+            WHERE c.workspace_id = ${workspaceId}
             GROUP BY c.id, c.capacity
         ),
         bucket_defs (bucket, sort_order) AS (
@@ -104,6 +122,7 @@ const runSummaryQuery = async (tz: string, departmentId: number | null) => {
                     SELECT s.department_id
                     FROM classes c2
                     JOIN subjects s ON s.id = c2.subject_id
+                    WHERE c2.workspace_id = ${workspaceId}
                     GROUP BY s.department_id
                     ORDER BY count(*) DESC
                     LIMIT 1
@@ -118,12 +137,14 @@ const runSummaryQuery = async (tz: string, departmentId: number | null) => {
                 avg(CASE WHEN c.capacity > 0 THEN LEAST(cnt.n::numeric / c.capacity, 1) * 100 END) AS institution_pct
             FROM months m
             CROSS JOIN target_department td
-            LEFT JOIN classes c ON (c.created_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz}) < (m.month_start + interval '1 month')
+            LEFT JOIN classes c ON c.workspace_id = ${workspaceId}
+                AND (c.created_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz}) < (m.month_start + interval '1 month')
             LEFT JOIN subjects s ON s.id = c.subject_id
             LEFT JOIN LATERAL (
                 SELECT count(*) AS n
                 FROM enrollments e
                 WHERE e.class_id = c.id
+                    AND e.workspace_id = ${workspaceId}
                     AND (e.created_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz}) < (m.month_start + interval '1 month')
             ) cnt ON true
             GROUP BY m.month_start
@@ -139,6 +160,7 @@ const runSummaryQuery = async (tz: string, departmentId: number | null) => {
                 FROM enrollments e
                 LEFT JOIN "user" stu ON stu.id = e.student_id
                 LEFT JOIN classes cl ON cl.id = e.class_id
+                WHERE e.workspace_id = ${workspaceId}
                 ORDER BY e.created_at DESC
                 LIMIT 10
             )
@@ -152,33 +174,22 @@ const runSummaryQuery = async (tz: string, departmentId: number | null) => {
                     c.created_at AS at
                 FROM classes c
                 LEFT JOIN "user" t ON t.id = c.teacher_id
+                WHERE c.workspace_id = ${workspaceId}
                 ORDER BY c.created_at DESC
-                LIMIT 10
-            )
-            UNION ALL
-            (
-                SELECT
-                    'user-' || u.id AS id,
-                    'user' AS type,
-                    u.name AS actor,
-                    u.name || ' joined as ' || u.role AS message,
-                    u.created_at AS at
-                FROM "user" u
-                ORDER BY u.created_at DESC
                 LIMIT 10
             )
         )
         SELECT json_build_object(
             'kpis', json_build_object(
                 'students', json_build_object(
-                    'value', uc.students_current, 'previous', uc.students_previous,
-                    'deltaPct', CASE WHEN uc.students_previous > 0
-                        THEN round(((uc.students_current - uc.students_previous)::numeric / uc.students_previous) * 100, 1) END
+                    'value', sc2.students_current, 'previous', sc2.students_previous,
+                    'deltaPct', CASE WHEN sc2.students_previous > 0
+                        THEN round(((sc2.students_current - sc2.students_previous)::numeric / sc2.students_previous) * 100, 1) END
                 ),
                 'faculty', json_build_object(
-                    'value', uc.faculty_current, 'previous', uc.faculty_previous,
-                    'deltaPct', CASE WHEN uc.faculty_previous > 0
-                        THEN round(((uc.faculty_current - uc.faculty_previous)::numeric / uc.faculty_previous) * 100, 1) END
+                    'value', fc.faculty_current, 'previous', fc.faculty_previous,
+                    'deltaPct', CASE WHEN fc.faculty_previous > 0
+                        THEN round(((fc.faculty_current - fc.faculty_previous)::numeric / fc.faculty_previous) * 100, 1) END
                 ),
                 'classes', json_build_object(
                     'value', clc.classes_current, 'previous', clc.classes_previous,
@@ -186,9 +197,9 @@ const runSummaryQuery = async (tz: string, departmentId: number | null) => {
                         THEN round(((clc.classes_current - clc.classes_previous)::numeric / clc.classes_previous) * 100, 1) END
                 ),
                 'subjects', json_build_object(
-                    'value', sc.subjects_current, 'previous', sc.subjects_previous,
-                    'deltaPct', CASE WHEN sc.subjects_previous > 0
-                        THEN round(((sc.subjects_current - sc.subjects_previous)::numeric / sc.subjects_previous) * 100, 1) END
+                    'value', suc.subjects_current, 'previous', suc.subjects_previous,
+                    'deltaPct', CASE WHEN suc.subjects_previous > 0
+                        THEN round(((suc.subjects_current - suc.subjects_previous)::numeric / suc.subjects_previous) * 100, 1) END
                 )
             ),
             'capacityDistribution', (
@@ -209,13 +220,13 @@ const runSummaryQuery = async (tz: string, departmentId: number | null) => {
                 FROM (SELECT * FROM recent_activity ORDER BY at DESC LIMIT 10) ra
             )
         ) AS result
-        FROM user_counts uc, class_counts clc, subject_counts sc;
+        FROM student_counts sc2, faculty_counts fc, class_counts clc, subject_counts suc;
     `);
 
     return result.rows[0]?.result;
 };
 
-router.get("/summary", dashboardRateLimit, async (req, res) => {
+router.get("/summary", requireAuth, workspaceMiddleware, dashboardRateLimit, async (req, res) => {
     try {
         const tzParam = req.query.tz;
         const tz = isPlausibleTimeZone(tzParam) ? tzParam : "UTC";
@@ -225,12 +236,12 @@ router.get("/summary", dashboardRateLimit, async (req, res) => {
 
         let summary: DashboardSummary | undefined;
         try {
-            summary = await runSummaryQuery(tz, departmentId);
+            summary = await runSummaryQuery(tz, departmentId, req.workspaceId!);
         } catch (e) {
             // Most likely an invalid IANA zone name from the client — retry once
             // against UTC rather than failing the whole page.
             console.error(`GET /dashboard/summary query failed for tz="${tz}", retrying with UTC: ${e}`);
-            summary = await runSummaryQuery("UTC", departmentId);
+            summary = await runSummaryQuery("UTC", departmentId, req.workspaceId!);
         }
 
         if (!summary) throw new Error("Summary query returned no row");
