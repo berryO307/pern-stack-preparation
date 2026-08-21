@@ -4,6 +4,8 @@ import { departments, subjects } from "../db/schema/index.js";
 import { and, asc, desc, eq, getTableColumns, ilike, or, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/authorize.js";
 import workspaceMiddleware from "../middleware/workspace.js";
+import { enforceRowQuota } from "../middleware/rowQuota.js";
+import domainWriteRateLimit from "../middleware/domainWriteRateLimit.js";
 
 const router = express.Router();
 
@@ -106,7 +108,7 @@ router.get("/:id", async (req, res) => {
     }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", domainWriteRateLimit, enforceRowQuota(departments, departments.workspaceId, "department"), async (req, res) => {
     try {
         const { name, code, description } = req.body;
 
@@ -129,7 +131,7 @@ router.post("/", async (req, res) => {
     }
 });
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", domainWriteRateLimit, async (req, res) => {
     try {
         const departmentId = Number(req.params.id);
         if (!Number.isFinite(departmentId)) return res.status(404).json({ error: "No department found" });
@@ -154,7 +156,7 @@ router.put("/:id", async (req, res) => {
     }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", domainWriteRateLimit, async (req, res) => {
     try {
         const departmentId = Number(req.params.id);
         if (!Number.isFinite(departmentId)) return res.status(404).json({ error: "No department found" });

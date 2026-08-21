@@ -5,6 +5,7 @@ import {db} from "../db/index.js";
 import {randomUUID} from "crypto";
 import {requireAdmin, requireAuth} from "../middleware/authorize.js";
 import workspaceMiddleware from "../middleware/workspace.js";
+import domainWriteRateLimit from "../middleware/domainWriteRateLimit.js";
 const router = express.Router();
 
 const pgErrorCode = (e: any): string | undefined => e?.code ?? e?.cause?.code;
@@ -123,7 +124,7 @@ router.get("/:id", requireAuth, workspaceMiddleware, async (req: Request, res: R
     }
 });
 
-router.post("/", requireAdmin, async (req, res) => {
+router.post("/", requireAdmin, domainWriteRateLimit, async (req, res) => {
     try {
         const { name, email, role, image, imageCldPubId } = req.body;
 
@@ -149,7 +150,7 @@ router.post("/", requireAdmin, async (req, res) => {
     }
 });
 
-router.put("/:id", requireAdmin, async (req, res) => {
+router.put("/:id", requireAdmin, domainWriteRateLimit, async (req, res) => {
     try {
         const userId = req.params.id;
         const { name, email, role, image, imageCldPubId } = req.body;
@@ -176,7 +177,7 @@ router.put("/:id", requireAdmin, async (req, res) => {
     }
 });
 
-router.delete("/:id", requireAdmin, async (req, res) => {
+router.delete("/:id", requireAdmin, domainWriteRateLimit, async (req, res) => {
     try {
         const userId = req.params.id;
 

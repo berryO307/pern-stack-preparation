@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Github } from "lucide-react";
 
 import { useLogin, useRefineOptions } from "@refinedev/core";
+import { trackRumEvent } from "@/lib/rum";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -50,6 +51,7 @@ export const SignInForm = () => {
 
   const handleSocialSignIn = (provider: SocialProvider) => {
     setActiveProvider(provider);
+    trackRumEvent("sign_in_started");
     login({ provider });
   };
 

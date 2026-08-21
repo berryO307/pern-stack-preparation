@@ -4,6 +4,8 @@ import {and, desc, eq, getTableColumns, ilike, or, sql} from "drizzle-orm";
 import {db} from "../db/index.js";
 import {requireAuth} from "../middleware/authorize.js";
 import workspaceMiddleware from "../middleware/workspace.js";
+import {enforceRowQuota} from "../middleware/rowQuota.js";
+import domainWriteRateLimit from "../middleware/domainWriteRateLimit.js";
 const router = express.Router();
 
 const pgErrorCode = (e: any): string | undefined => e?.code ?? e?.cause?.code;
@@ -95,7 +97,7 @@ router.get("/:id", async (req, res) => {
     }
 });
 
-router.post("/", async (req, res) => {
+router.post("/", domainWriteRateLimit, enforceRowQuota(subjects, subjects.workspaceId, "subject"), async (req, res) => {
     try {
         const { name, code, description, departmentId } = req.body;
 
@@ -128,7 +130,7 @@ router.post("/", async (req, res) => {
     }
 });
 
-router.put("/:id", async (req, res) => {
+router.put("/:id", domainWriteRateLimit, async (req, res) => {
     try {
         const subjectId = Number(req.params.id);
         if (!Number.isFinite(subjectId)) return res.status(404).json({ error: "No subject found" });
@@ -170,7 +172,7 @@ router.put("/:id", async (req, res) => {
     }
 });
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", domainWriteRateLimit, async (req, res) => {
     try {
         const subjectId = Number(req.params.id);
         if (!Number.isFinite(subjectId)) return res.status(404).json({ error: "No subject found" });

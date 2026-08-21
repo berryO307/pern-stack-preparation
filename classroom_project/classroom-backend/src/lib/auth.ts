@@ -12,6 +12,16 @@ const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "")
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean);
 
+// Frontend (Vercel) and backend (Railway) are different registrable domains
+// in production, not subdomains of one root domain - that's a genuine
+// cross-site request, and Better Auth's own default (`sameSite: "lax"`)
+// is never sent on those. Without this the session cookie silently fails to
+// attach to any frontend->backend fetch and auth breaks end-to-end.
+// `SameSite=None` requires `Secure`, which requires HTTPS - conditioned on
+// NODE_ENV so local dev (http://localhost, same site across ports) keeps
+// using the plain default instead of dropping cookies entirely.
+const isProduction = process.env.NODE_ENV === "production";
+
 export const auth = betterAuth({
     secret: process.env.BETTER_AUTH_SECRET!,
     trustedOrigins: [process.env.FRONTEND_URL!],
@@ -72,5 +82,10 @@ export const auth = betterAuth({
                 },
             },
         },
+    },
+    advanced: {
+        defaultCookieAttributes: isProduction
+            ? { sameSite: "none", secure: true }
+            : undefined,
     },
 });

@@ -109,9 +109,13 @@ async function upsertTeachers() {
 
 async function upsertStudents() {
     const ids: string[] = [];
-    for (const first of FIRST_NAMES) {
-        const last = LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)];
-        const name = `${first} ${last}`;
+    // Fixed pairing, not random - the email (used for dedup below) has to be
+    // stable across every seedWorkspace call. A random first+last pairing
+    // here would mint a brand-new "unique" email on every workspace
+    // provisioned, permanently leaking ~25 garbage user rows per workspace
+    // since fixture users are global and never swept.
+    for (let i = 0; i < FIRST_NAMES.length; i++) {
+        const name = `${FIRST_NAMES[i]} ${LAST_NAMES[i % LAST_NAMES.length]}`;
         ids.push(await upsertFixtureUser(name, `${slugify(name)}@classroom.demo`, "student"));
     }
     return ids;

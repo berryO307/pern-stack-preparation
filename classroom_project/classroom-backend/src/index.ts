@@ -11,13 +11,16 @@ import dashboardRouter from "./routes/dashboard.js";
 import workspaceRouter from "./routes/workspace.js";
 import cors from "cors";
 import securityMiddleware from "./middleware/security.js";
+import authRateLimit from "./middleware/authRateLimit.js";
 import sessionMiddleware from "./middleware/session.js";
 import {toNodeHandler} from "better-auth/node";
 import {auth} from "./lib/auth.js";
-import {startWorkspaceCleanupSchedule} from "./lib/cleanup.js";
 
 const app = express();
-const PORT = 8000;
+// Railway (and most PaaS hosts) assign the listening port dynamically via
+// this env var and route external traffic to whatever the app actually
+// binds - hardcoding 8000 would silently break in production.
+const PORT = process.env.PORT ? Number(process.env.PORT) : 8000;
 
 if (!process.env.FRONTEND_URL) {
   throw new Error("Frontend URL is missing");
@@ -36,7 +39,7 @@ app.use(cors({
 app.use(sessionMiddleware);
 app.use(securityMiddleware);
 
-app.all('/api/auth/*splat', toNodeHandler(auth));
+app.all('/api/auth/*splat', authRateLimit, toNodeHandler(auth));
 
 app.use(express.json());
 
@@ -54,5 +57,4 @@ app.get("/", (_req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server listening at http://localhost:${PORT}`);
-  startWorkspaceCleanupSchedule();
 });
