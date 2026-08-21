@@ -12,6 +12,7 @@ import {
   Sidebar as ShadcnSidebar,
   SidebarContent as ShadcnSidebarContent,
   SidebarHeader as ShadcnSidebarHeader,
+  SidebarFooter as ShadcnSidebarFooter,
   useSidebar as useShadcnSidebar,
   SidebarTrigger as ShadcnSidebarTrigger,
 } from "@/components/ui/sidebar";
@@ -27,8 +28,11 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { ChevronRight, ListIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CommandSearch } from "@/components/refine-ui/layout/command-search";
+import { SidebarUserMenu } from "@/components/refine-ui/layout/sidebar-user-menu";
 
 export function Sidebar() {
   const { open } = useShadcnSidebar();
@@ -55,6 +59,7 @@ export function Sidebar() {
           }
         )}
       >
+        <CommandSearch />
         {menuItems.map((item: TreeMenuItem) => (
           <SidebarItem
             key={item.key || item.name}
@@ -63,6 +68,15 @@ export function Sidebar() {
           />
         ))}
       </ShadcnSidebarContent>
+      <ShadcnSidebarFooter
+        className={cn("border-r", "border-t", "border-border", {
+          "px-3": open,
+          "px-1": !open,
+        })}
+      >
+        <Separator className="mb-2" />
+        <SidebarUserMenu />
+      </ShadcnSidebarFooter>
     </ShadcnSidebar>
   );
 }

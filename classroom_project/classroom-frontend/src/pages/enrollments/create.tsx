@@ -3,26 +3,26 @@ import { Breadcrumb } from "@/components/refine-ui/layout/breadcrumb.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useBack } from "@refinedev/core";
 import { Separator } from "@/components/ui/separator.tsx";
-import SubjectForm from "@/pages/subjects/form.tsx";
+import EnrollmentForm from "@/pages/enrollments/form.tsx";
 
-const SubjectsCreate = () => {
+const EnrollmentsCreate = () => {
   const back = useBack();
 
   return (
     <CreateView className="class-view">
       <Breadcrumb />
 
-      <h1 className="page-title">Create a Subject</h1>
+      <h1 className="page-title">Enroll a Student</h1>
       <div className="intro-row">
-        <p>Provide the required information below to add a subject.</p>
+        <p>Assign a student to a class roster.</p>
         <Button onClick={() => back()}>Go Back</Button>
       </div>
 
       <Separator />
 
-      <SubjectForm action="create" />
+      <EnrollmentForm />
     </CreateView>
   );
 };
 
-export default SubjectsCreate;
+export default EnrollmentsCreate;

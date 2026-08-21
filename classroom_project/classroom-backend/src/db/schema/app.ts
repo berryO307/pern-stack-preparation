@@ -24,7 +24,9 @@ export const departments = pgTable('departments', {
     // cleanup sweep can cascade-delete them when that guest expires.
     createdBy: text('created_by').references(() => user.id, { onDelete: 'cascade' }),
     ...timestamps
-});
+}, (table) => [
+    index('departments_created_at_idx').on(table.createdAt),
+]);
 
 export const subjects = pgTable('subjects', {
     id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
@@ -34,7 +36,10 @@ export const subjects = pgTable('subjects', {
     description: varchar('description', {length: 255}),
     createdBy: text('created_by').references(() => user.id, { onDelete: 'cascade' }),
     ...timestamps
-});
+}, (table) => [
+    index('subjects_created_at_idx').on(table.createdAt),
+    index('subjects_department_id_idx').on(table.departmentId),
+]);
 
 export const classes = pgTable('classes', {
     id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
@@ -53,6 +58,7 @@ export const classes = pgTable('classes', {
 }, (table) => [
     index('classes_subject_id_idx').on(table.subjectId),
     index('classes_teacher_id_idx').on(table.teacherId),
+    index('classes_created_at_idx').on(table.createdAt),
     check('classes_capacity_non_negative', sql`${table.capacity} >= 0`)
 ]);
 
@@ -67,7 +73,12 @@ export const enrollments = pgTable('enrollments', {
 }, (table) => [
     uniqueIndex('enrollments_student_id_class_id_unique').on(table.studentId, table.classId),
     index('enrollments_student_id_idx').on(table.studentId),
-    index('enrollments_class_id_idx').on(table.classId)
+    index('enrollments_class_id_idx').on(table.classId),
+    index('enrollments_created_at_idx').on(table.createdAt),
+    // Analog of the class_id+status composite the summary endpoint would want —
+    // this schema has no enrollment status column, so class_id+created_at is the
+    // pairing that actually serves the per-class, date-bounded counts it runs.
+    index('enrollments_class_id_created_at_idx').on(table.classId, table.createdAt),
 ]);
 
 export const departmentRelations = relations(departments, ({ many }) => ({ subjects: many(subjects) }));

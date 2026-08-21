@@ -51,6 +51,9 @@ declare global {
         ) => void,
       ) => CloudinaryWidget;
     };
+    // Site24x7 RUM beacon command queue (loaded async in index.html). Real,
+    // documented methods only — see lib/rum.ts for why this is a short list.
+    s247r?: (command: "userId" | "captureException", value: string | Error) => void;
   }
 }
 
@@ -139,6 +142,7 @@ export type Enrollment = {
   id: number;
   studentId: string;
   classId: number;
+  createdBy?: string | null;
   student?: User;
   class?: Class;
   createdAt?: string;
@@ -150,54 +154,45 @@ export type UserDetails = User & {
   enrolledClasses?: Enrollment[];
 };
 
-export type DashboardMetrics = {
-  totalStudents: number;
-  totalTeachers: number;
-  totalAdmins: number;
-  totalUsers: number;
-  totalDepartments: number;
-  totalSubjects: number;
-  totalClasses: number;
-  activeClasses: number;
-  totalEnrollments: number;
-  totalCapacity: number;
-  capacityUtilization: number;
+// Mirrors classroom-backend/src/routes/dashboard.ts's `DashboardSummary` type —
+// keep both in sync when either side changes shape.
+export type DashboardKpi = {
+  value: number;
+  previous: number;
+  deltaPct: number | null;
 };
 
-export type EnrollmentTrendPoint = {
-  date: string;
-  count: number;
+export type CapacityBucket = {
+  bucket: "0-20" | "21-40" | "41-60" | "61-80" | "81-100";
+  classes: number;
 };
 
-export type DepartmentClassCount = {
-  department: string;
-  count: number | string;
+export type FillRatePoint = {
+  month: string;
+  selected: number | null;
+  institution: number | null;
 };
 
-export type CapacityStatusBucket = {
-  status: "low" | "medium" | "high" | "full";
-  label: string;
-  count: number;
-};
-
-export type UserRoleCount = {
-  role: "student" | "teacher" | "admin";
-  count: number;
-};
-
-export type ActivityItem = {
+export type RecentActivityItem = {
+  id: string;
   type: "enrollment" | "class" | "user";
+  actor: string;
   message: string;
-  timestamp: string;
+  at: string;
 };
 
-export type DashboardData = {
-  metrics: DashboardMetrics;
-  enrollmentTrends: EnrollmentTrendPoint[];
-  classesByDepartment: DepartmentClassCount[];
-  capacityStatus: CapacityStatusBucket[];
-  userDistribution: UserRoleCount[];
-  activity: ActivityItem[];
+export type DashboardSummary = {
+  kpis: {
+    students: DashboardKpi;
+    faculty: DashboardKpi;
+    classes: DashboardKpi;
+    subjects: DashboardKpi;
+  };
+  capacityDistribution: CapacityBucket[];
+  capacityExcluded: number;
+  fillRateDepartmentId: number | null;
+  fillRateTrend: FillRatePoint[];
+  recentActivity: RecentActivityItem[];
 };
 
 export type SignUpPayload = {

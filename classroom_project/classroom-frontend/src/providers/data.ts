@@ -19,7 +19,8 @@ const options: CreateDataProviderOptions = {
       if (
         (resource === "classes" ||
           resource === "departments" ||
-          resource === "users") &&
+          resource === "users" ||
+          resource === "enrollments") &&
         sorters?.[0]
       ) {
         params.sortField = sorters[0].field;
@@ -55,6 +56,7 @@ const options: CreateDataProviderOptions = {
         if (resource === "enrollments") {
           if (field === "classId") params.classId = value;
           if (field === "studentId") params.studentId = value;
+          if (field === "search") params.search = value;
         }
       });
 
@@ -114,6 +116,10 @@ const options: CreateDataProviderOptions = {
     mapResponse: async (response) => {
       const json: GetOneResponse = await response.json();
 
+      // @refinedev/rest's UpdateParams typing requires a guaranteed object
+      // here (unlike deleteOne, which explicitly allows undefined) — an
+      // update response missing `data` is a backend contract violation, not
+      // something worth widening this type for.
       return json.data ?? {};
     },
 
@@ -157,7 +163,19 @@ const options: CreateDataProviderOptions = {
     mapResponse: async (response) => {
       const json: GetOneResponse = await response.json();
 
+      // Same AnyObject (not | undefined) contract as `update` above.
       return json.data ?? {};
+    },
+
+    transformError: async (response) => {
+      const body = await response
+        .json<{ error?: string; message?: string }>()
+        .catch(() => ({}) as { error?: string; message?: string });
+
+      return {
+        message: body.message ?? body.error ?? "Request failed",
+        statusCode: response.status,
+      };
     },
   },
 };

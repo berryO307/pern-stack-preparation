@@ -30,14 +30,22 @@ import { Loader2 } from "lucide-react";
 import UploadWidget from "@/components/upload-widget.tsx";
 import type { UploadWidgetValue } from "@/types";
 import { ROLE_OPTIONS } from "@/constants";
+import { useSearchParams } from "react-router";
 
 type UserFormProps = {
   action: "create" | "edit";
 };
 
 const UserForm = ({ action }: UserFormProps) => {
+  const [searchParams] = useSearchParams();
+  const presetRole = searchParams.get("role");
+  const isValidRole = (role: string | null): role is "student" | "teacher" | "admin" =>
+    role === "student" || role === "teacher" || role === "admin";
+
   const form = useForm({
     resolver: zodResolver(userSchema),
+    defaultValues:
+      action === "create" && isValidRole(presetRole) ? { role: presetRole } : undefined,
     refineCoreProps: {
       resource: "users",
       action,

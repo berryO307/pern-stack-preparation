@@ -19,6 +19,13 @@
       name="twitter:image"
       content="https://refine.dev/img/refine_social.png"
     />
+    <!--
+      Site24x7 RUM. SPA routes (including "/") are detected automatically via
+      History API listening — there's no manual per-route registration call in
+      Site24x7's public JS API, so react-router's client-side navigation here
+      is all that's needed for the dashboard route to show up as its own page
+      in RUM, not collapsed into a generic bucket.
+    -->
     <script type="text/javascript">
       (function(w,d,s,r,k,h,m){
         if(w.performance && w.performance.timing && w.performance.navigation && !w.s247r) {
