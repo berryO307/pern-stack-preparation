@@ -14,7 +14,6 @@ import securityMiddleware from "./middleware/security.js";
 import sessionMiddleware from "./middleware/session.js";
 import {toNodeHandler} from "better-auth/node";
 import {auth} from "./lib/auth.js";
-import {startWorkspaceCleanupSchedule} from "./lib/cleanup.js";
 
 const app = express();
 const PORT = 8000;
@@ -54,5 +53,4 @@ app.get("/", (_req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server listening at http://localhost:${PORT}`);
-  startWorkspaceCleanupSchedule();
 });
