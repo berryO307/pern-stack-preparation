@@ -55,6 +55,10 @@ app.get("/", (_req, res) => {
   res.send("Classroom backend is up and running!");
 });
 
-app.listen(PORT, () => {
-  console.log(`Server listening at http://localhost:${PORT}`);
+// Bind explicitly to 0.0.0.0 - Railway's proxy couldn't reach the app even
+// though it reported "listening" fine, which is the classic symptom of a
+// container only accepting connections on a loopback-scoped default rather
+// than every interface.
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server listening on port ${PORT}`);
 });
