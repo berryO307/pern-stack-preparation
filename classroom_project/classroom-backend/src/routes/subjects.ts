@@ -2,7 +2,8 @@ import express from "express";
 import {departments, subjects} from "../db/schema/index.js";
 import {and, desc, eq, getTableColumns, ilike, or, sql} from "drizzle-orm";
 import {db} from "../db/index.js";
-import {requireAdmin} from "../middleware/authorize.js";
+import {requireAuth} from "../middleware/authorize.js";
+import workspaceMiddleware from "../middleware/workspace.js";
 const router = express.Router();
 
 const pgErrorCode = (e: any): string | undefined => e?.code ?? e?.cause?.code;
@@ -10,6 +11,8 @@ const pgErrorCode = (e: any): string | undefined => e?.code ?? e?.cause?.code;
 // Escapes ILIKE wildcard/escape characters so a literal search for e.g. "50%"
 // or "a_b" doesn't get interpreted as a wildcard pattern.
 const escapeLike = (value: string) => value.replace(/[%_\\]/g, "\\$&");
+
+router.use(requireAuth, workspaceMiddleware);
 
 // Get all subjects switch optional search, filtering and pagination
 router.get("/", async (req, res) => {
@@ -19,7 +22,7 @@ router.get("/", async (req, res) => {
         const currentPage = Math.max(1, parseInt(String(page), 10) || 1);
         const limitPerPage = Math.min(Math.max(1, parseInt(String(limit), 10) || 10), 100);
         const offset = (currentPage - 1) * limitPerPage;
-        const filterConditions = [];
+        const filterConditions = [eq(subjects.workspaceId, req.workspaceId!)];
         // If search query exists, filter by subject name OR subject code
         if (search) {
             const searchPattern = `%${escapeLike(String(search))}%`;
@@ -27,7 +30,7 @@ router.get("/", async (req, res) => {
                 or(
                     ilike(subjects.name, searchPattern),
                     ilike(subjects.code, searchPattern),
-                )
+                )!
             );
         }
         // If department filter exists, match department name
@@ -35,8 +38,7 @@ router.get("/", async (req, res) => {
             const deptPattern = `%${String(department).replace(/[%_]/g, '\\$&')}%`;
             filterConditions.push(ilike(departments.name, deptPattern));
         }
-        // Combine all filters using AND if any exist
-        const whereClause = filterConditions.length > 0 ? and(...filterConditions) : undefined;
+        const whereClause = and(...filterConditions);
         const countResults = await db
             .select({ count: sql<number>`count(*)` })
             .from(subjects)
@@ -82,7 +84,7 @@ router.get("/:id", async (req, res) => {
             })
             .from(subjects)
             .leftJoin(departments, eq(subjects.departmentId, departments.id))
-            .where(eq(subjects.id, subjectId));
+            .where(and(eq(subjects.id, subjectId), eq(subjects.workspaceId, req.workspaceId!)));
 
         if (!subject) return res.status(404).json({ error: "No subject found" });
 
@@ -93,7 +95,7 @@ router.get("/:id", async (req, res) => {
     }
 });
 
-router.post("/", requireAdmin, async (req, res) => {
+router.post("/", async (req, res) => {
     try {
         const { name, code, description, departmentId } = req.body;
 
@@ -101,9 +103,16 @@ router.post("/", requireAdmin, async (req, res) => {
             return res.status(400).json({ error: "Name, code and department are required" });
         }
 
+        const [department] = await db
+            .select({ id: departments.id })
+            .from(departments)
+            .where(and(eq(departments.id, Number(departmentId)), eq(departments.workspaceId, req.workspaceId!)));
+
+        if (!department) return res.status(409).json({ error: "No department found with that id" });
+
         const [createdSubject] = await db
             .insert(subjects)
-            .values({ name, code, description, departmentId: Number(departmentId) })
+            .values({ name, code, description, departmentId: Number(departmentId), workspaceId: req.workspaceId! })
             .returning();
 
         res.status(201).json({ data: createdSubject });
@@ -119,12 +128,21 @@ router.post("/", requireAdmin, async (req, res) => {
     }
 });
 
-router.put("/:id", requireAdmin, async (req, res) => {
+router.put("/:id", async (req, res) => {
     try {
         const subjectId = Number(req.params.id);
         if (!Number.isFinite(subjectId)) return res.status(404).json({ error: "No subject found" });
 
         const { name, code, description, departmentId } = req.body;
+
+        if (departmentId !== undefined) {
+            const [department] = await db
+                .select({ id: departments.id })
+                .from(departments)
+                .where(and(eq(departments.id, Number(departmentId)), eq(departments.workspaceId, req.workspaceId!)));
+
+            if (!department) return res.status(409).json({ error: "No department found with that id" });
+        }
 
         const [updatedSubject] = await db
             .update(subjects)
@@ -134,7 +152,7 @@ router.put("/:id", requireAdmin, async (req, res) => {
                 description,
                 departmentId: departmentId !== undefined ? Number(departmentId) : undefined,
             })
-            .where(eq(subjects.id, subjectId))
+            .where(and(eq(subjects.id, subjectId), eq(subjects.workspaceId, req.workspaceId!)))
             .returning();
 
         if (!updatedSubject) return res.status(404).json({ error: "No subject found" });
@@ -152,14 +170,14 @@ router.put("/:id", requireAdmin, async (req, res) => {
     }
 });
 
-router.delete("/:id", requireAdmin, async (req, res) => {
+router.delete("/:id", async (req, res) => {
     try {
         const subjectId = Number(req.params.id);
         if (!Number.isFinite(subjectId)) return res.status(404).json({ error: "No subject found" });
 
         const [deletedSubject] = await db
             .delete(subjects)
-            .where(eq(subjects.id, subjectId))
+            .where(and(eq(subjects.id, subjectId), eq(subjects.workspaceId, req.workspaceId!)))
             .returning({ id: subjects.id });
 
         if (!deletedSubject) return res.status(404).json({ error: "No subject found" });

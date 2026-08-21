@@ -1,31 +1,30 @@
 import { and, eq, lt } from "drizzle-orm";
 import { db } from "../db/index.js";
-import { user } from "../db/schema/index.js";
+import { demoWorkspaces } from "../db/schema/index.js";
 
-export const GUEST_SESSION_HOURS = 2;
-const SWEEP_INTERVAL_MS = 30 * 60 * 1000;
+// Interim in-process backstop for workspaces nobody ever revisits after they
+// expire (lazy expiry on the request path handles the common case, but only
+// runs when that user makes another request). Formalizing this as a real
+// Railway cron job, separate from the app process, is a later step - not
+// this one.
+const SWEEP_INTERVAL_MS = 15 * 60 * 1000;
 
-// Guest accounts (and everything they created - cascades via createdBy FKs) are purged
-// once they're older than GUEST_SESSION_HOURS. There's no reliable "browser tab closed"
-// signal, so this age-based sweep is the real cleanup mechanism.
-export const sweepExpiredGuests = async () => {
-    const cutoff = new Date(Date.now() - GUEST_SESSION_HOURS * 60 * 60 * 1000);
-
+export const sweepExpiredWorkspaces = async () => {
     try {
         const deleted = await db
-            .delete(user)
-            .where(and(eq(user.isAnonymous, true), lt(user.createdAt, cutoff)))
-            .returning({ id: user.id });
+            .delete(demoWorkspaces)
+            .where(and(eq(demoWorkspaces.isPermanent, false), lt(demoWorkspaces.expiresAt, new Date())))
+            .returning({ id: demoWorkspaces.id });
 
         if (deleted.length > 0) {
-            console.log(`Guest cleanup: removed ${deleted.length} expired guest account(s)`);
+            console.log(`Workspace cleanup: removed ${deleted.length} expired workspace(s)`);
         }
     } catch (e) {
-        console.error("Guest cleanup sweep failed", e);
+        console.error("Workspace cleanup sweep failed", e);
     }
 };
 
-export const startGuestCleanupSchedule = () => {
-    sweepExpiredGuests();
-    setInterval(sweepExpiredGuests, SWEEP_INTERVAL_MS);
+export const startWorkspaceCleanupSchedule = () => {
+    sweepExpiredWorkspaces();
+    setInterval(sweepExpiredWorkspaces, SWEEP_INTERVAL_MS);
 };

@@ -29,6 +29,20 @@
       "when": 1787297486137,
       "tag": "0004_worried_mojo",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787335110865,
+      "tag": "0005_step1_drop_guest_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787335164203,
+      "tag": "0006_step2_add_workspace_scoping",
+      "breakpoints": true
     }
   ]
 }

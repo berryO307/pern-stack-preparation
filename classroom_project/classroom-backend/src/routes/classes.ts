@@ -2,7 +2,8 @@ import express from "express";
 import {db} from "../db/index.js";
 import {classes, classStatusEnum, departments, enrollments, subjects, user} from "../db/schema/index.js";
 import {and, asc, desc, eq, getTableColumns, ilike, or, sql} from "drizzle-orm";
-import {enforceWriteQuota, incrementWriteCount, requireAuth} from "../middleware/authorize.js";
+import {requireAuth} from "../middleware/authorize.js";
+import workspaceMiddleware from "../middleware/workspace.js";
 
 const router = express.Router();
 
@@ -25,7 +26,9 @@ const SORTABLE_CLASS_FIELDS = {
     fillRate: fillRateExpr,
 } as const;
 
-router.post('/', requireAuth, enforceWriteQuota, async (req, res) => {
+router.use(requireAuth, workspaceMiddleware);
+
+router.post('/', async (req, res) => {
     try {
         const { name, teacherId, subjectId, capacity, description, status, bannerUrl, bannerCldPubId } = req.body;
 
@@ -36,19 +39,24 @@ router.post('/', requireAuth, enforceWriteQuota, async (req, res) => {
             return res.status(400).json({error: "Capacity must be a positive number"});
         }
 
+        const [subject] = await db
+            .select({ id: subjects.id })
+            .from(subjects)
+            .where(and(eq(subjects.id, Number(subjectId)), eq(subjects.workspaceId, req.workspaceId!)));
+
+        if (!subject) return res.status(409).json({ error: "No subject found with that id" });
+
         const [createdClass] = await db
             .insert(classes)
             .values({
                 name, teacherId, subjectId, capacity, description, status, bannerUrl, bannerCldPubId,
                 inviteCode: Math.random().toString(36).substring(2, 9),
                 schedules: [],
-                createdBy: req.user!.id,
+                workspaceId: req.workspaceId!,
             })
             .returning({ id: classes.id});
 
         if (!createdClass) throw Error;
-
-        await incrementWriteCount(req.user!.id);
 
         res.status(201).json({data: createdClass});
 
@@ -74,7 +82,7 @@ router.get("/", async (req, res) => {
             ? (sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn))
             : desc(classes.createdAt);
 
-        const filterConditions = [];
+        const filterConditions = [eq(classes.workspaceId, req.workspaceId!)];
         // If search query exists, filter by class name OR invite code
         if (search) {
             const searchPattern = `%${escapeLike(String(search))}%`;
@@ -82,7 +90,7 @@ router.get("/", async (req, res) => {
                 or(
                     ilike(classes.name, searchPattern),
                     ilike(classes.inviteCode, searchPattern),
-                )
+                )!
             );
         }
         // If subject filter exists, match subject name
@@ -102,8 +110,7 @@ router.get("/", async (req, res) => {
             }
             filterConditions.push(eq(classes.status, status as typeof classStatusEnum.enumValues[number]));
         }
-        // Combine all filters using AND if any exist
-        const whereClause = filterConditions.length > 0 ? and(...filterConditions) : undefined;
+        const whereClause = and(...filterConditions);
         const countResults = await db
             .select({ count: sql<number>`count(*)` })
             .from(classes)
@@ -163,7 +170,7 @@ router.get('/:id', async (req, res) => {
         .leftJoin(subjects, eq(classes.subjectId, subjects.id))
         .leftJoin(user, eq(classes.teacherId, user.id))
         .leftJoin(departments, eq(subjects.departmentId, departments.id))
-        .where(eq(classes.id, classId))
+        .where(and(eq(classes.id, classId), eq(classes.workspaceId, req.workspaceId!)))
 
     if (!classDetail) return res.status(404).json({error: "No class found"});
 

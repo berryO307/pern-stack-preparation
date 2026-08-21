@@ -2,7 +2,8 @@ import express from "express";
 import { db } from "../db/index.js";
 import { classes, enrollments, subjects, user } from "../db/schema/index.js";
 import { and, asc, desc, eq, getTableColumns, ilike, or, sql } from "drizzle-orm";
-import { enforceWriteQuota, incrementWriteCount, requireAuth } from "../middleware/authorize.js";
+import { requireAuth } from "../middleware/authorize.js";
+import workspaceMiddleware from "../middleware/workspace.js";
 
 const router = express.Router();
 
@@ -13,6 +14,8 @@ const SORTABLE_ENROLLMENT_FIELDS = {
     student: user.name,
     class: classes.name,
 } as const;
+
+router.use(requireAuth, workspaceMiddleware);
 
 // Get enrollments, with optional classId/studentId filters, search, sorting and pagination.
 // classId/studentId narrow the result set (used by the class roster and student profile
@@ -34,7 +37,7 @@ router.get("/", async (req, res) => {
             return res.status(400).json({ error: "Invalid classId" });
         }
 
-        const filterConditions = [];
+        const filterConditions = [eq(enrollments.workspaceId, req.workspaceId!)];
         if (classId) filterConditions.push(eq(enrollments.classId, Number(classId)));
         if (studentId) filterConditions.push(eq(enrollments.studentId, String(studentId)));
         if (search) {
@@ -43,10 +46,10 @@ router.get("/", async (req, res) => {
                     ilike(user.name, `%${search}%`),
                     ilike(user.email, `%${search}%`),
                     ilike(classes.name, `%${search}%`),
-                )
+                )!
             );
         }
-        const whereClause = filterConditions.length > 0 ? and(...filterConditions) : undefined;
+        const whereClause = and(...filterConditions);
 
         const countResults = await db
             .select({ count: sql<number>`count(*)` })
@@ -93,7 +96,7 @@ router.get("/", async (req, res) => {
     }
 });
 
-router.post("/", requireAuth, enforceWriteQuota, async (req, res) => {
+router.post("/", async (req, res) => {
     try {
         const { classId: rawClassId, studentId } = req.body;
         const classId = Number(rawClassId);
@@ -105,7 +108,7 @@ router.post("/", requireAuth, enforceWriteQuota, async (req, res) => {
         const [targetClass] = await db
             .select({ id: classes.id })
             .from(classes)
-            .where(eq(classes.id, classId));
+            .where(and(eq(classes.id, classId), eq(classes.workspaceId, req.workspaceId!)));
 
         if (!targetClass) return res.status(404).json({ error: "No class found" });
 
@@ -118,8 +121,8 @@ router.post("/", requireAuth, enforceWriteQuota, async (req, res) => {
         const [, insertResult] = await db.batch([
             db.execute(sql`SELECT capacity FROM ${classes} WHERE ${classes.id} = ${classId} FOR UPDATE`),
             db.execute(sql`
-                INSERT INTO ${enrollments} (class_id, student_id, created_by)
-                SELECT ${classId}, ${studentId}, ${req.user!.id}
+                INSERT INTO ${enrollments} (class_id, student_id, workspace_id)
+                SELECT ${classId}, ${studentId}, ${req.workspaceId!}
                 WHERE (SELECT count(*) FROM ${enrollments} WHERE class_id = ${classId})
                     < (SELECT capacity FROM ${classes} WHERE id = ${classId})
                 RETURNING *
@@ -132,8 +135,6 @@ router.post("/", requireAuth, enforceWriteQuota, async (req, res) => {
             return res.status(409).json({ error: "This class is at full capacity" });
         }
 
-        await incrementWriteCount(req.user!.id);
-
         res.status(201).json({ data: createdEnrollment });
     } catch (e: any) {
         if (pgErrorCode(e) === "23505") {
@@ -144,25 +145,14 @@ router.post("/", requireAuth, enforceWriteQuota, async (req, res) => {
     }
 });
 
-router.delete("/:id", requireAuth, async (req, res) => {
+router.delete("/:id", async (req, res) => {
     try {
         const enrollmentId = Number(req.params.id);
         if (!Number.isFinite(enrollmentId)) return res.status(404).json({ error: "No enrollment found" });
 
-        const [existingEnrollment] = await db
-            .select({ createdBy: enrollments.createdBy })
-            .from(enrollments)
-            .where(eq(enrollments.id, enrollmentId));
-
-        if (!existingEnrollment) return res.status(404).json({ error: "No enrollment found" });
-
-        if (req.user!.role !== "admin" && existingEnrollment.createdBy !== req.user!.id) {
-            return res.status(403).json({ error: "You can only unenroll students you enrolled yourself" });
-        }
-
         const [deletedEnrollment] = await db
             .delete(enrollments)
-            .where(eq(enrollments.id, enrollmentId))
+            .where(and(eq(enrollments.id, enrollmentId), eq(enrollments.workspaceId, req.workspaceId!)))
             .returning({ id: enrollments.id });
 
         if (!deletedEnrollment) return res.status(404).json({ error: "No enrollment found" });

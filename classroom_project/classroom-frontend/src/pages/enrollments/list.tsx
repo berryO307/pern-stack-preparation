@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input.tsx";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useTable } from "@refinedev/react-table";
 import { type ColumnDef } from "@tanstack/react-table";
-import { useGetIdentity } from "@refinedev/core";
 import { format } from "date-fns";
 import { DataTable } from "@/components/refine-ui/data-table/data-table.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
@@ -15,11 +14,7 @@ import { Enrollment } from "@/types";
 import { useDebouncedValue } from "@/hooks/use-debounced-value.ts";
 import { getFilterValue } from "@/lib/filters.ts";
 
-type Identity = { id: string; role?: string };
-
 const EnrollmentsList = () => {
-  const { data: identity } = useGetIdentity<Identity>();
-
   const EnrollmentsTable = useTable<Enrollment>({
     columns: useMemo<ColumnDef<Enrollment>[]>(
       () => [
@@ -75,21 +70,14 @@ const EnrollmentsList = () => {
           id: "actions",
           size: 140,
           header: () => <p className="column-title">Actions</p>,
-          cell: ({ row }) => {
-            const canUnenroll =
-              identity?.role === "admin" || row.original.createdBy === identity?.id;
-
-            if (!canUnenroll) return null;
-
-            return (
-              <DeleteButton resource="enrollments" recordItemId={row.original.id} size="sm">
-                Unenroll
-              </DeleteButton>
-            );
-          },
+          cell: ({ row }) => (
+            <DeleteButton resource="enrollments" recordItemId={row.original.id} size="sm">
+              Unenroll
+            </DeleteButton>
+          ),
         },
       ],
-      [identity?.id, identity?.role],
+      [],
     ),
     refineCoreProps: {
       resource: "enrollments",

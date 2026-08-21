@@ -4,8 +4,10 @@ declare global {
             user?: {
                 id: string;
                 role?: 'admin' | 'teacher' | 'student';
-                isAnonymous?: boolean;
             }
+            // Set by middleware/workspace.ts once the caller's demo workspace has
+            // been resolved (provisioning/reseeding it first if needed).
+            workspaceId?: string;
         }
     }
 }

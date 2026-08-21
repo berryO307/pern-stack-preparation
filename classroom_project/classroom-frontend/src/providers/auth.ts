@@ -3,20 +3,37 @@ import { authClient } from "@/lib/auth-client.ts";
 
 export const authProvider: AuthProvider = {
   login: async (params) => {
-    const { email, password } = params;
-    const { error } = await authClient.signIn.email({ email, password });
+    const provider = params?.provider as "google" | "github" | undefined;
+
+    if (!provider) {
+      return {
+        success: false,
+        error: {
+          name: "LoginError",
+          message: "Choose a sign-in provider",
+        },
+      };
+    }
+
+    // On success this redirects the whole page to the provider's consent
+    // screen, so this promise only ever resolves on a pre-redirect failure
+    // (e.g. network error) — there's no post-login branch to handle here.
+    const { error } = await authClient.signIn.social({
+      provider,
+      callbackURL: "/",
+    });
 
     if (error) {
       return {
         success: false,
         error: {
           name: "LoginError",
-          message: error.message ?? "Invalid email or password",
+          message: error.message ?? `Failed to sign in with ${provider}`,
         },
       };
     }
 
-    return { success: true, redirectTo: "/" };
+    return { success: true };
   },
 
   logout: async () => {
@@ -50,15 +67,13 @@ export const authProvider: AuthProvider = {
 
     if (!data?.user) return null;
 
-    const user = data.user as typeof data.user & { role?: string };
-
     return {
-      id: user.id,
-      name: user.name,
-      fullName: user.name,
-      email: user.email,
-      avatar: user.image ?? undefined,
-      role: user.role,
+      id: data.user.id,
+      name: data.user.name,
+      fullName: data.user.name,
+      email: data.user.email,
+      avatar: data.user.image ?? undefined,
+      role: data.user.role,
     };
   },
 };

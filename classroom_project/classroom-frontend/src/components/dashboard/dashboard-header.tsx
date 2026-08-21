@@ -41,34 +41,34 @@ export function DashboardHeader() {
         )}
       </div>
 
-      {isAdmin && (
-        <div className="flex shrink-0 items-center gap-2">
-          <CsvImportDialog />
+      <div className="flex shrink-0 items-center gap-2">
+        {isAdmin && <CsvImportDialog />}
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="lg">
-                <Plus className="size-4" />
-                Add
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => navigate("/subjects/create")}>
-                Add subject
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate("/classes/create")}>
-                Add class
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate("/departments/create")}>
-                Add department
-              </DropdownMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="lg">
+              <Plus className="size-4" />
+              Add
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => navigate("/subjects/create")}>
+              Add subject
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate("/classes/create")}>
+              Add class
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate("/departments/create")}>
+              Add department
+            </DropdownMenuItem>
+            {isAdmin && (
               <DropdownMenuItem onClick={() => navigate("/users/create?role=teacher")}>
                 Add faculty
               </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      )}
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   );
 }
