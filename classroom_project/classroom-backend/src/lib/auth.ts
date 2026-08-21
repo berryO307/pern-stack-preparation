@@ -29,8 +29,13 @@ export const auth = betterAuth({
     },
     user: {
         additionalFields: {
+            // input: false — role must never be settable by the client through
+            // better-auth's own account/profile endpoints (e.g. update-user).
+            // The only legitimate way to change a role is the app's own
+            // PUT /api/users/:id, which is requireAdmin-gated and writes via a
+            // direct Drizzle query that bypasses this field config entirely.
             role: {
-                type: "string", required: true, defaultValue: 'student', input: true,
+                type: "string", required: true, defaultValue: 'student', input: false,
             },
             imageCldPubId: {
                 type: "string", required: false, input: true,

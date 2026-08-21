@@ -1,45 +1,90 @@
 import express from "express";
 import { db } from "../db/index.js";
-import { classes, enrollments, user } from "../db/schema/index.js";
-import { and, desc, eq, getTableColumns, sql } from "drizzle-orm";
+import { classes, enrollments, subjects, user } from "../db/schema/index.js";
+import { and, asc, desc, eq, getTableColumns, ilike, or, sql } from "drizzle-orm";
 import { enforceWriteQuota, incrementWriteCount, requireAuth } from "../middleware/authorize.js";
 
 const router = express.Router();
 
 const pgErrorCode = (e: any): string | undefined => e?.code ?? e?.cause?.code;
 
-// Get all enrollments for a class, with student info
+const SORTABLE_ENROLLMENT_FIELDS = {
+    createdAt: enrollments.createdAt,
+    student: user.name,
+    class: classes.name,
+} as const;
+
+// Get enrollments, with optional classId/studentId filters, search, sorting and pagination.
+// classId/studentId narrow the result set (used by the class roster and student profile
+// views); omitting both returns the full, paginated list for the Enrollments page.
 router.get("/", async (req, res) => {
     try {
-        const { classId, studentId } = req.query;
+        const { classId, studentId, search, page = 1, limit = 10, sortField, sortOrder } = req.query;
+
+        const currentPage = Math.max(1, parseInt(String(page), 10) || 1);
+        const limitPerPage = Math.min(Math.max(1, parseInt(String(limit), 10) || 10), 100);
+        const offset = (currentPage - 1) * limitPerPage;
+
+        const sortColumn = SORTABLE_ENROLLMENT_FIELDS[String(sortField) as keyof typeof SORTABLE_ENROLLMENT_FIELDS];
+        const orderByClause = sortColumn
+            ? (sortOrder === "asc" ? asc(sortColumn) : desc(sortColumn))
+            : desc(enrollments.createdAt);
+
+        if (classId !== undefined && !Number.isFinite(Number(classId))) {
+            return res.status(400).json({ error: "Invalid classId" });
+        }
 
         const filterConditions = [];
         if (classId) filterConditions.push(eq(enrollments.classId, Number(classId)));
         if (studentId) filterConditions.push(eq(enrollments.studentId, String(studentId)));
-
-        if (filterConditions.length === 0) {
-            return res.status(400).json({ error: "classId or studentId is required" });
+        if (search) {
+            filterConditions.push(
+                or(
+                    ilike(user.name, `%${search}%`),
+                    ilike(user.email, `%${search}%`),
+                    ilike(classes.name, `%${search}%`),
+                )
+            );
         }
+        const whereClause = filterConditions.length > 0 ? and(...filterConditions) : undefined;
 
-        const whereClause = and(...filterConditions);
+        const countResults = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(enrollments)
+            .leftJoin(user, eq(enrollments.studentId, user.id))
+            .leftJoin(classes, eq(enrollments.classId, classes.id))
+            .where(whereClause);
 
-        const enrollmentsList = await db
+        const totalCount = countResults[0]?.count ?? 0;
+
+        const rows = await db
             .select({
                 ...getTableColumns(enrollments),
                 student: { ...getTableColumns(user) },
+                class: { ...getTableColumns(classes) },
+                subject: { ...getTableColumns(subjects) },
             })
             .from(enrollments)
             .leftJoin(user, eq(enrollments.studentId, user.id))
+            .leftJoin(classes, eq(enrollments.classId, classes.id))
+            .leftJoin(subjects, eq(classes.subjectId, subjects.id))
             .where(whereClause)
-            .orderBy(desc(enrollments.createdAt));
+            .orderBy(orderByClause)
+            .limit(limitPerPage)
+            .offset(offset);
+
+        const enrollmentsList = rows.map(({ class: classRow, subject, ...rest }) => ({
+            ...rest,
+            class: classRow ? { ...classRow, subject } : null,
+        }));
 
         res.status(200).json({
             data: enrollmentsList,
             pagination: {
-                page: 1,
-                limit: enrollmentsList.length,
-                total: enrollmentsList.length,
-                totalPages: 1,
+                page: currentPage,
+                limit: limitPerPage,
+                total: totalCount,
+                totalPages: Math.ceil(totalCount / limitPerPage),
             },
         });
     } catch (e) {
@@ -50,32 +95,42 @@ router.get("/", async (req, res) => {
 
 router.post("/", requireAuth, enforceWriteQuota, async (req, res) => {
     try {
-        const { classId, studentId } = req.body;
+        const { classId: rawClassId, studentId } = req.body;
+        const classId = Number(rawClassId);
 
-        if (!classId || !studentId) {
+        if (!Number.isFinite(classId) || classId <= 0 || !studentId) {
             return res.status(400).json({ error: "classId and studentId are required" });
         }
 
         const [targetClass] = await db
-            .select({ id: classes.id, capacity: classes.capacity })
+            .select({ id: classes.id })
             .from(classes)
-            .where(eq(classes.id, Number(classId)));
+            .where(eq(classes.id, classId));
 
         if (!targetClass) return res.status(404).json({ error: "No class found" });
 
-        const enrolledCountResult = await db
-            .select({ count: sql<number>`count(*)` })
-            .from(enrollments)
-            .where(eq(enrollments.classId, targetClass.id));
+        // Neon's HTTP driver has no interactive transactions (a session can't hold
+        // a lock across separate round trips), but `db.batch` sends a fixed list
+        // of queries as one atomic Postgres transaction. Locking the class row
+        // with FOR UPDATE first means a concurrent enrollment on the same class
+        // blocks until this one commits, so the capacity check the INSERT's WHERE
+        // clause does can't race against another request's insert.
+        const [, insertResult] = await db.batch([
+            db.execute(sql`SELECT capacity FROM ${classes} WHERE ${classes.id} = ${classId} FOR UPDATE`),
+            db.execute(sql`
+                INSERT INTO ${enrollments} (class_id, student_id, created_by)
+                SELECT ${classId}, ${studentId}, ${req.user!.id}
+                WHERE (SELECT count(*) FROM ${enrollments} WHERE class_id = ${classId})
+                    < (SELECT capacity FROM ${classes} WHERE id = ${classId})
+                RETURNING *
+            `),
+        ]);
 
-        if (Number(enrolledCountResult[0]?.count ?? 0) >= targetClass.capacity) {
+        const createdEnrollment = (insertResult as unknown as { rows: (typeof enrollments.$inferSelect)[] }).rows[0];
+
+        if (!createdEnrollment) {
             return res.status(409).json({ error: "This class is at full capacity" });
         }
-
-        const [createdEnrollment] = await db
-            .insert(enrollments)
-            .values({ classId: targetClass.id, studentId, createdBy: req.user!.id })
-            .returning();
 
         await incrementWriteCount(req.user!.id);
 

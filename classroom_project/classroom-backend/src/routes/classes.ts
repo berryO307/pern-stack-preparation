@@ -6,12 +6,23 @@ import {enforceWriteQuota, incrementWriteCount, requireAuth} from "../middleware
 
 const router = express.Router();
 
+// Escapes ILIKE wildcard/escape characters so a literal search for e.g. "50%"
+// or "a_b" doesn't get interpreted as a wildcard pattern.
+const escapeLike = (value: string) => value.replace(/[%_\\]/g, "\\$&");
+
+// Fill rate isn't a stored column — compute it inline so it's sortable like any
+// other field (used by the dashboard capacity chart's "View full report" link).
+const fillRateExpr = sql`CASE WHEN ${classes.capacity} > 0
+    THEN (SELECT count(*)::numeric FROM ${enrollments} WHERE ${enrollments.classId} = ${classes.id}) / ${classes.capacity}
+    ELSE 0 END`;
+
 const SORTABLE_CLASS_FIELDS = {
     id: classes.id,
     name: classes.name,
     capacity: classes.capacity,
     status: classes.status,
     createdAt: classes.createdAt,
+    fillRate: fillRateExpr,
 } as const;
 
 router.post('/', requireAuth, enforceWriteQuota, async (req, res) => {
@@ -20,6 +31,9 @@ router.post('/', requireAuth, enforceWriteQuota, async (req, res) => {
 
         if (!name || !teacherId || !subjectId) {
             return res.status(400).json({error: "Name, teacher and subject are required"});
+        }
+        if (capacity !== undefined && (!Number.isFinite(Number(capacity)) || Number(capacity) <= 0)) {
+            return res.status(400).json({error: "Capacity must be a positive number"});
         }
 
         const [createdClass] = await db
@@ -63,10 +77,11 @@ router.get("/", async (req, res) => {
         const filterConditions = [];
         // If search query exists, filter by class name OR invite code
         if (search) {
+            const searchPattern = `%${escapeLike(String(search))}%`;
             filterConditions.push(
                 or(
-                    ilike(classes.name, `%${search}%`),
-                    ilike(classes.inviteCode, `%${search}%`),
+                    ilike(classes.name, searchPattern),
+                    ilike(classes.inviteCode, searchPattern),
                 )
             );
         }
@@ -82,7 +97,10 @@ router.get("/", async (req, res) => {
         }
         // If status filter exists, match status exactly
         if (status) {
-            filterConditions.push(eq(classes.status, String(status) as typeof classStatusEnum.enumValues[number]));
+            if (!(classStatusEnum.enumValues as readonly string[]).includes(String(status))) {
+                return res.status(400).json({ error: "Invalid status filter" });
+            }
+            filterConditions.push(eq(classes.status, status as typeof classStatusEnum.enumValues[number]));
         }
         // Combine all filters using AND if any exist
         const whereClause = filterConditions.length > 0 ? and(...filterConditions) : undefined;

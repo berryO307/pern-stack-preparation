@@ -8,6 +8,11 @@ const router = express.Router();
 
 const pgErrorCode = (e: any): string | undefined => e?.code ?? e?.cause?.code;
 
+// Postgres' own `role` enum column already rejects out-of-domain values, but
+// only as a raw DB error (500) — this gives a clean 400 instead.
+const isValidRole = (value: unknown): value is typeof roleEnum.enumValues[number] =>
+    typeof value === "string" && (roleEnum.enumValues as readonly string[]).includes(value);
+
 const SORTABLE_USER_FIELDS = {
     id: user.id,
     name: user.name,
@@ -42,7 +47,10 @@ router.get("/", async (req, res) => {
         }
         // If role filter exists, match role exactly
         if (role) {
-            filterConditions.push(eq(user.role, String(role) as typeof roleEnum.enumValues[number]));
+            if (!isValidRole(role)) {
+                return res.status(400).json({ error: "Invalid role filter" });
+            }
+            filterConditions.push(eq(user.role, role));
         }
         // Combine all filters using AND if any exist
         const whereClause = filterConditions.length > 0 ? and(...filterConditions) : undefined;
@@ -119,6 +127,9 @@ router.post("/", requireAdmin, async (req, res) => {
         if (!name || !email || !role) {
             return res.status(400).json({ error: "Name, email and role are required" });
         }
+        if (!isValidRole(role)) {
+            return res.status(400).json({ error: "Invalid role" });
+        }
 
         const [createdUser] = await db
             .insert(user)
@@ -139,6 +150,10 @@ router.put("/:id", requireAdmin, async (req, res) => {
     try {
         const userId = req.params.id;
         const { name, email, role, image, imageCldPubId } = req.body;
+
+        if (role !== undefined && !isValidRole(role)) {
+            return res.status(400).json({ error: "Invalid role" });
+        }
 
         const [updatedUser] = await db
             .update(user)
