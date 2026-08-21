@@ -3,8 +3,6 @@ import aj from '../config/arcjet.js';
 import {ArcjetNodeRequest, ArcjetRequest, slidingWindow} from "@arcjet/node";
 
 const securityMiddleware = async (req: Request, res:Response, next: NextFunction) => {
-   if(process.env.NODE_ENV !== 'test') return next();
-
    try {
        const role: RateLimitRole = req.user?.role ?? 'guest';
 
@@ -13,17 +11,17 @@ const securityMiddleware = async (req: Request, res:Response, next: NextFunction
 
        switch(role) {
            case 'admin':
-               limit = 20;
-               message = 'Admin request limit exceeded (20 per minute).Slow Down.';
+               limit = 120;
+               message = 'Admin request limit exceeded (120 per minute).Slow Down.';
                break;
            case 'teacher':
            case 'student':
-               limit = 10;
-               message = 'User request limit exceeded (10 per minute).Please Wait.';
+               limit = 60;
+               message = 'User request limit exceeded (60 per minute).Please Wait.';
                break;
            default:
-               limit = 5;
-               message = 'Guest request limit exceeded ( 5 per minute).Please sign up for higher limits.'
+               limit = 30;
+               message = 'Guest request limit exceeded (30 per minute).Please Wait.'
                break;
        }
 

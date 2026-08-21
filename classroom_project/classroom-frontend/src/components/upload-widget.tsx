@@ -3,7 +3,13 @@ import { UploadCloud, X } from "lucide-react";
 import type { UploadWidgetProps, UploadWidgetValue } from "@/types";
 import { CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET } from "@/constants";
 
-const UploadWidget = ({ value = null, onChange, disabled = false }: UploadWidgetProps) => {
+const UploadWidget = ({
+  value = null,
+  onChange,
+  disabled = false,
+  label = "Click to upload a banner image",
+  previewAlt = "Uploaded banner preview",
+}: UploadWidgetProps) => {
   const widgetRef = useRef<CloudinaryWidget | null>(null);
   const onChangeRef = useRef(onChange);
   const [preview, setPreview] = useState<UploadWidgetValue | null>(value);
@@ -72,7 +78,7 @@ const UploadWidget = ({ value = null, onChange, disabled = false }: UploadWidget
         <div className="upload-preview relative">
           <img
             src={preview.url}
-            alt="Uploaded banner preview"
+            alt={previewAlt}
             className="w-full rounded-md object-cover"
           />
           <button
@@ -98,7 +104,7 @@ const UploadWidget = ({ value = null, onChange, disabled = false }: UploadWidget
           }}
         >
           <UploadCloud className="h-6 w-6" />
-          <span>Click to upload a banner image</span>
+          <span>{label}</span>
         </div>
       )}
     </div>

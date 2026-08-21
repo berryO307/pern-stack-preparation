@@ -63,6 +63,8 @@ export interface UploadWidgetProps {
   value?: UploadWidgetValue | null;
   onChange?: (value: UploadWidgetValue | null) => void;
   disabled?: boolean;
+  label?: string;
+  previewAlt?: string;
 }
 
 export enum UserRole {
@@ -92,7 +94,12 @@ export type Schedule = {
 export type Department = {
   id: number;
   name: string;
-  description: string;
+  code: string;
+  description?: string;
+  subjectCount?: number;
+  subjects?: Subject[];
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type Class = {
@@ -116,6 +123,7 @@ export type ClassDetails = {
   description: string;
   status: "active" | "inactive";
   capacity: number;
+  enrolledCount?: number;
   courseCode: string;
   courseName: string;
   bannerUrl?: string;
@@ -125,6 +133,71 @@ export type ClassDetails = {
   department?: Department;
   schedules: Schedule[];
   inviteCode?: string;
+};
+
+export type Enrollment = {
+  id: number;
+  studentId: string;
+  classId: number;
+  student?: User;
+  class?: Class;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type UserDetails = User & {
+  classesTaught?: Class[];
+  enrolledClasses?: Enrollment[];
+};
+
+export type DashboardMetrics = {
+  totalStudents: number;
+  totalTeachers: number;
+  totalAdmins: number;
+  totalUsers: number;
+  totalDepartments: number;
+  totalSubjects: number;
+  totalClasses: number;
+  activeClasses: number;
+  totalEnrollments: number;
+  totalCapacity: number;
+  capacityUtilization: number;
+};
+
+export type EnrollmentTrendPoint = {
+  date: string;
+  count: number;
+};
+
+export type DepartmentClassCount = {
+  department: string;
+  count: number | string;
+};
+
+export type CapacityStatusBucket = {
+  status: "low" | "medium" | "high" | "full";
+  label: string;
+  count: number;
+};
+
+export type UserRoleCount = {
+  role: "student" | "teacher" | "admin";
+  count: number;
+};
+
+export type ActivityItem = {
+  type: "enrollment" | "class" | "user";
+  message: string;
+  timestamp: string;
+};
+
+export type DashboardData = {
+  metrics: DashboardMetrics;
+  enrollmentTrends: EnrollmentTrendPoint[];
+  classesByDepartment: DepartmentClassCount[];
+  capacityStatus: CapacityStatusBucket[];
+  userDistribution: UserRoleCount[];
+  activity: ActivityItem[];
 };
 
 export type SignUpPayload = {

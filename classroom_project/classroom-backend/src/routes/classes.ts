@@ -1,9 +1,20 @@
 import express from "express";
 import {db} from "../db/index.js";
-import {classes, departments, subjects, user} from "../db/schema/index.js";
+import {classes, classStatusEnum, departments, enrollments, subjects, user} from "../db/schema/index.js";
 import {and, asc, desc, eq, getTableColumns, ilike, or, sql} from "drizzle-orm";
+import {enforceWriteQuota, incrementWriteCount, requireAuth} from "../middleware/authorize.js";
 
 const router = express.Router();
+
+// Escapes ILIKE wildcard/escape characters so a literal search for e.g. "50%"
+// or "a_b" doesn't get interpreted as a wildcard pattern.
+const escapeLike = (value: string) => value.replace(/[%_\\]/g, "\\$&");
+
+// Fill rate isn't a stored column — compute it inline so it's sortable like any
+// other field (used by the dashboard capacity chart's "View full report" link).
+const fillRateExpr = sql`CASE WHEN ${classes.capacity} > 0
+    THEN (SELECT count(*)::numeric FROM ${enrollments} WHERE ${enrollments.classId} = ${classes.id}) / ${classes.capacity}
+    ELSE 0 END`;
 
 const SORTABLE_CLASS_FIELDS = {
     id: classes.id,
@@ -11,22 +22,39 @@ const SORTABLE_CLASS_FIELDS = {
     capacity: classes.capacity,
     status: classes.status,
     createdAt: classes.createdAt,
+    fillRate: fillRateExpr,
 } as const;
 
-router.post('/', async (req, res) => {
+router.post('/', requireAuth, enforceWriteQuota, async (req, res) => {
     try {
         const { name, teacherId, subjectId, capacity, description, status, bannerUrl, bannerCldPubId } = req.body;
+
+        if (!name || !teacherId || !subjectId) {
+            return res.status(400).json({error: "Name, teacher and subject are required"});
+        }
+        if (capacity !== undefined && (!Number.isFinite(Number(capacity)) || Number(capacity) <= 0)) {
+            return res.status(400).json({error: "Capacity must be a positive number"});
+        }
+
         const [createdClass] = await db
             .insert(classes)
-            .values({... req.body, inviteCode: Math.random().toString(36).substring(2, 9), schedules: []})
+            .values({
+                name, teacherId, subjectId, capacity, description, status, bannerUrl, bannerCldPubId,
+                inviteCode: Math.random().toString(36).substring(2, 9),
+                schedules: [],
+                createdBy: req.user!.id,
+            })
             .returning({ id: classes.id});
 
         if (!createdClass) throw Error;
+
+        await incrementWriteCount(req.user!.id);
+
         res.status(201).json({data: createdClass});
 
     }catch(e) {
         console.error(`POST /classes error: ${e}`);
-        res.status(500).json({error: e});
+        res.status(500).json({error: 'Failed to create class'});
 
     }
 })
@@ -34,7 +62,7 @@ router.post('/', async (req, res) => {
 // Get all classes with optional search, filtering and pagination
 router.get("/", async (req, res) => {
     try {
-        const { search, subject, teacher, page = 1, limit = 10, sortField, sortOrder } = req.query;
+        const { search, subject, teacher, status, page = 1, limit = 10, sortField, sortOrder } = req.query;
 
         const currentPage = Math.max(1, parseInt(String(page), 10) || 1);
         const limitPerPage = Math.min(Math.max(1, parseInt(String(limit), 10) || 10), 100);
@@ -49,10 +77,11 @@ router.get("/", async (req, res) => {
         const filterConditions = [];
         // If search query exists, filter by class name OR invite code
         if (search) {
+            const searchPattern = `%${escapeLike(String(search))}%`;
             filterConditions.push(
                 or(
-                    ilike(classes.name, `%${search}`),
-                    ilike(classes.inviteCode, `%${search}`),
+                    ilike(classes.name, searchPattern),
+                    ilike(classes.inviteCode, searchPattern),
                 )
             );
         }
@@ -65,6 +94,13 @@ router.get("/", async (req, res) => {
         if (teacher) {
             const teacherPattern = `%${String(teacher).replace(/[%_]/g, '\\$&')}%`;
             filterConditions.push(ilike(user.name, teacherPattern));
+        }
+        // If status filter exists, match status exactly
+        if (status) {
+            if (!(classStatusEnum.enumValues as readonly string[]).includes(String(status))) {
+                return res.status(400).json({ error: "Invalid status filter" });
+            }
+            filterConditions.push(eq(classes.status, status as typeof classStatusEnum.enumValues[number]));
         }
         // Combine all filters using AND if any exist
         const whereClause = filterConditions.length > 0 ? and(...filterConditions) : undefined;
@@ -126,12 +162,17 @@ router.get('/:id', async (req, res) => {
         .from(classes)
         .leftJoin(subjects, eq(classes.subjectId, subjects.id))
         .leftJoin(user, eq(classes.teacherId, user.id))
-        .leftJoin(departments, eq(subjects.departmentsId, departments.id))
+        .leftJoin(departments, eq(subjects.departmentId, departments.id))
         .where(eq(classes.id, classId))
 
-    if (!classDetails) return res.status(404).json({error: "No class found"});
+    if (!classDetail) return res.status(404).json({error: "No class found"});
 
-    res.status(200).json({data: classDetail});
+    const enrolledCountResult = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(enrollments)
+        .where(eq(enrollments.classId, classId));
+
+    res.status(200).json({data: {...classDetail, enrolledCount: Number(enrolledCountResult[0]?.count ?? 0)}});
 })
 
 export default router;

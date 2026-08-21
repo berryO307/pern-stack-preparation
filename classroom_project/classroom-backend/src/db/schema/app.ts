@@ -20,6 +20,9 @@ export const departments = pgTable('departments', {
     code: varchar('code', {length: 50}).notNull().unique(),
     name: varchar('name', {length:255}).notNull(),
     description: varchar('description', {length: 255}),
+    // Null for seeded/admin-owned data. Set for guest-created rows so the
+    // cleanup sweep can cascade-delete them when that guest expires.
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'cascade' }),
     ...timestamps
 });
 
@@ -29,6 +32,7 @@ export const subjects = pgTable('subjects', {
     name: varchar('name', {length:255}).notNull(),
     code: varchar('code', {length: 50}).notNull().unique(),
     description: varchar('description', {length: 255}),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'cascade' }),
     ...timestamps
 });
 
@@ -44,6 +48,7 @@ export const classes = pgTable('classes', {
     capacity: integer('capacity').notNull().default(50),
     status: classStatusEnum('status').notNull().default('active'),
     schedules: jsonb('schedules').$type<ClassSchedule[]>(),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'cascade' }),
     ...timestamps
 }, (table) => [
     index('classes_subject_id_idx').on(table.subjectId),
@@ -55,6 +60,9 @@ export const enrollments = pgTable('enrollments', {
     id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
     studentId: text('student_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
     classId: integer('class_id').notNull().references(() => classes.id, { onDelete: 'cascade' }),
+    // Who performed the enrollment action (may differ from studentId), for
+    // quota accounting and guest cleanup.
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'cascade' }),
     ...timestamps
 }, (table) => [
     uniqueIndex('enrollments_student_id_class_id_unique').on(table.studentId, table.classId),

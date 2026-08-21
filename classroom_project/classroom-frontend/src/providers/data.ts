@@ -16,7 +16,12 @@ const options: CreateDataProviderOptions = {
 
       const params: Record<string, string | number> = { page, limit: pageSize };
 
-      if (resource === "classes" && sorters?.[0]) {
+      if (
+        (resource === "classes" ||
+          resource === "departments" ||
+          resource === "users") &&
+        sorters?.[0]
+      ) {
         params.sortField = sorters[0].field;
         params.sortOrder = sorters[0].order;
       }
@@ -40,6 +45,16 @@ const options: CreateDataProviderOptions = {
           if (field === "name") params.search = value;
           if (field === "subject") params.subject = value;
           if (field === "teacher") params.teacher = value;
+          if (field === "status") params.status = value;
+        }
+
+        if (resource === "departments") {
+          if (field === "name" || field === "code") params.search = value;
+        }
+
+        if (resource === "enrollments") {
+          if (field === "classId") params.classId = value;
+          if (field === "studentId") params.studentId = value;
         }
       });
 
@@ -67,6 +82,17 @@ const options: CreateDataProviderOptions = {
 
       return json.data ?? [];
     },
+
+    transformError: async (response) => {
+      const body = await response
+        .json<{ error?: string }>()
+        .catch(() => ({}) as { error?: string });
+
+      return {
+        message: body.error ?? "Failed to create record",
+        statusCode: response.status,
+      };
+    },
   },
 
   getOne: {
@@ -78,8 +104,71 @@ const options: CreateDataProviderOptions = {
       return json.data;
     },
   },
+
+  update: {
+    getEndpoint: ({ resource, id }) => `${resource}/${id}`,
+    getRequestMethod: () => "put",
+
+    buildBodyParams: async ({ variables }) => variables,
+
+    mapResponse: async (response) => {
+      const json: GetOneResponse = await response.json();
+
+      return json.data ?? {};
+    },
+
+    transformError: async (response) => {
+      const body = await response
+        .json<{ error?: string }>()
+        .catch(() => ({}) as { error?: string });
+
+      return {
+        message: body.error ?? "Failed to update record",
+        statusCode: response.status,
+      };
+    },
+  },
+
+  deleteOne: {
+    getEndpoint: ({ resource, id }) => `${resource}/${id}`,
+
+    // The backend returns `{ data: { id } }` on delete — return it rather than
+    // undefined so callers relying on the mutation result (optimistic UI,
+    // onSuccess handlers reading the deleted id) actually get it.
+    mapResponse: async (response) => {
+      const json: GetOneResponse<Record<string, unknown>> = await response.json();
+
+      return json.data;
+    },
+
+    transformError: async (response) => {
+      const body = await response
+        .json<{ error?: string }>()
+        .catch(() => ({}) as { error?: string });
+
+      return {
+        message: body.error ?? "Failed to delete record",
+        statusCode: response.status,
+      };
+    },
+  },
+
+  custom: {
+    mapResponse: async (response) => {
+      const json: GetOneResponse = await response.json();
+
+      return json.data ?? {};
+    },
+  },
 };
 
-const { dataProvider } = createDataProvider(BACKEND_BASE_URL, options);
+// `ky` (the fetch wrapper createDataProvider uses under the hood) defaults to
+// `credentials: "same-origin"`, so without this every mutation silently drops
+// the session cookie on the frontend->backend cross-origin request and 401s
+// on any auth-gated route — reads worked and masked this since GET endpoints
+// don't require a session.
+const { dataProvider } = createDataProvider(BACKEND_BASE_URL, options, {
+  credentials: "include",
+});
 
 export { dataProvider };

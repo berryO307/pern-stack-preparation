@@ -1,4 +1,4 @@
-import { Refine, GitHubBanner } from "@refinedev/core";
+import { Authenticated, Refine, GitHubBanner } from "@refinedev/core";
 import { DevtoolsPanel, DevtoolsProvider } from "@refinedev/devtools";
 import { RefineKbar, RefineKbarProvider } from "@refinedev/kbar";
 
@@ -10,8 +10,8 @@ import routerProvider, {
   DocumentTitleHandler,
 } from "@refinedev/react-router";
 import { Login } from "./pages/login";
-import { Register } from "./pages/register";
 import { ForgotPassword } from "./pages/forgot-password";
+import { ResetPassword } from "./pages/reset-password";
 import { ErrorComponent } from "./components/refine-ui/layout/error-component";
 import { Layout } from "./components/refine-ui/layout/layout";
 import { Header } from "./components/refine-ui/layout/header";
@@ -20,13 +20,22 @@ import { Toaster } from "./components/refine-ui/notification/toaster";
 import { ThemeProvider } from "./components/refine-ui/theme/theme-provider";
 import "./App.css";
 import Dashboard from "@/pages/dashboard.tsx";
-import { BookOpen, GraduationCap, Home } from "lucide-react";
+import { Building2, BookOpen, GraduationCap, Home, Users } from "lucide-react";
 import SubjectsList from "@/pages/subjects/list.tsx";
 import SubjectsCreate from "@/pages/subjects/create.tsx";
 import ClassesList from "@/pages/classes/list.tsx";
 import ClassesCreate from "@/pages/classes/create.tsx";
 import ClassesShow from "@/pages/classes/show.tsx";
+import DepartmentsList from "@/pages/departments/list.tsx";
+import DepartmentsCreate from "@/pages/departments/create.tsx";
+import DepartmentsEdit from "@/pages/departments/edit.tsx";
+import DepartmentsShow from "@/pages/departments/show.tsx";
+import UsersList from "@/pages/users/list.tsx";
+import UsersCreate from "@/pages/users/create.tsx";
+import UsersEdit from "@/pages/users/edit.tsx";
+import UsersShow from "@/pages/users/show.tsx";
 import { dataProvider } from "@/providers/data.ts";
+import { authProvider } from "@/providers/auth.ts";
 
 function App() {
   return (
@@ -37,6 +46,7 @@ function App() {
           <DevtoolsProvider>
             <Refine
               dataProvider={dataProvider}
+              authProvider={authProvider}
               notificationProvider={useNotificationProvider()}
               routerProvider={routerProvider}
               options={{
@@ -51,6 +61,14 @@ function App() {
                   meta: { label: "Home", icon: <Home /> },
                 },
                 {
+                  name: "departments",
+                  list: "/departments",
+                  create: "/departments/create",
+                  edit: "/departments/edit/:id",
+                  show: "/departments/show/:id",
+                  meta: { label: "Departments", icon: <Building2 /> },
+                },
+                {
                   name: "subjects",
                   list: "/subjects",
                   create: "/subjects/create",
@@ -63,17 +81,36 @@ function App() {
                   show: "/classes/show/:id",
                   meta: { label: "Classes", icon: <GraduationCap /> },
                 },
+                {
+                  name: "users",
+                  list: "/users",
+                  create: "/users/create",
+                  edit: "/users/edit/:id",
+                  show: "/users/show/:id",
+                  meta: { label: "Users", icon: <Users /> },
+                },
               ]}
             >
               <Routes>
                 <Route
                   element={
-                    <Layout>
-                      <Outlet />
-                    </Layout>
+                    <Authenticated
+                      key="authenticated-inner"
+                      fallback={<CatchAllNavigate to="/login" />}
+                    >
+                      <Layout>
+                        <Outlet />
+                      </Layout>
+                    </Authenticated>
                   }
                 >
                   <Route path="/" element={<Dashboard />} />
+                  <Route path="departments">
+                    <Route index element={<DepartmentsList />} />
+                    <Route path="create" element={<DepartmentsCreate />} />
+                    <Route path="edit/:id" element={<DepartmentsEdit />} />
+                    <Route path="show/:id" element={<DepartmentsShow />} />
+                  </Route>
                   <Route path="subjects">
                     <Route index element={<SubjectsList />} />
                     <Route path="create" element={<SubjectsCreate />} />
@@ -83,6 +120,39 @@ function App() {
                     <Route path="create" element={<ClassesCreate />} />
                     <Route path="show/:id" element={<ClassesShow />} />
                   </Route>
+                  <Route path="users">
+                    <Route index element={<UsersList />} />
+                    <Route path="create" element={<UsersCreate />} />
+                    <Route path="edit/:id" element={<UsersEdit />} />
+                    <Route path="show/:id" element={<UsersShow />} />
+                  </Route>
+                </Route>
+
+                <Route
+                  element={
+                    <Authenticated
+                      key="authenticated-outer"
+                      fallback={<Outlet />}
+                    >
+                      <NavigateToResource resource="dashboard" />
+                    </Authenticated>
+                  }
+                >
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
+                </Route>
+
+                <Route
+                  element={
+                    <Authenticated key="authenticated-catch-all">
+                      <Layout>
+                        <Outlet />
+                      </Layout>
+                    </Authenticated>
+                  }
+                >
+                  <Route path="*" element={<ErrorComponent />} />
                 </Route>
               </Routes>
               <Toaster />

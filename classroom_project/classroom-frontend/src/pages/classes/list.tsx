@@ -2,7 +2,7 @@ import { ListView } from "@/components/refine-ui/views/list-view.tsx";
 import { Breadcrumb } from "@/components/ui/breadcrumb.tsx";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input.tsx";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useTable } from "@refinedev/react-table";
 import { type ColumnDef } from "@tanstack/react-table";
 import { useList } from "@refinedev/core";
@@ -18,12 +18,16 @@ import { DataTable } from "@/components/refine-ui/data-table/data-table.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import type { Class, Subject, User } from "@/types";
 import { ShowButton } from "@/components/refine-ui/buttons/show.tsx";
+import { useDebouncedValue } from "@/hooks/use-debounced-value.ts";
+import { getFilterValue } from "@/lib/filters.ts";
+
+const STATUS_OPTIONS = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+  { value: "archived", label: "Archived" },
+];
 
 const ClassesList = () => {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedSubject, setSelectedSubject] = useState("all");
-  const [selectedTeacher, setSelectedTeacher] = useState("all");
-
   const { query: subjectsQuery } = useList<Subject>({
     resource: "subjects",
     pagination: {
@@ -41,32 +45,6 @@ const ClassesList = () => {
 
   const subjects = subjectsQuery?.data?.data || [];
   const teachers = teachersQuery?.data?.data || [];
-
-  const searchFilters = searchQuery
-    ? [{ field: "name", operator: "contains" as const, value: searchQuery }]
-    : [];
-
-  const subjectFilters =
-    selectedSubject === "all"
-      ? []
-      : [
-          {
-            field: "subject",
-            operator: "eq" as const,
-            value: selectedSubject,
-          },
-        ];
-
-  const teacherFilters =
-    selectedTeacher === "all"
-      ? []
-      : [
-          {
-            field: "teacher",
-            operator: "eq" as const,
-            value: selectedTeacher,
-          },
-        ];
 
   const ClassesTable = useTable<Class>({
     columns: useMemo<ColumnDef<Class>[]>(
@@ -161,13 +139,57 @@ const ClassesList = () => {
       resource: "classes",
       pagination: { pageSize: 10, mode: "server" },
       filters: {
-        permanent: [...searchFilters, ...subjectFilters, ...teacherFilters],
+        defaultBehavior: "replace",
       },
       sorters: {
         initial: [{ field: "id", order: "desc" }],
       },
+      syncWithLocation: true,
     },
   });
+
+  const { filters, setFilters } = ClassesTable.refineCore;
+
+  const [searchQuery, setSearchQuery] = useState(() => getFilterValue(filters, "name"));
+  const [selectedSubject, setSelectedSubject] = useState(() => getFilterValue(filters, "subject") || "all");
+  const [selectedTeacher, setSelectedTeacher] = useState(() => getFilterValue(filters, "teacher") || "all");
+  const [selectedStatus, setSelectedStatus] = useState(() => getFilterValue(filters, "status") || "all");
+  const debouncedSearch = useDebouncedValue(searchQuery, 300);
+
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    const nextFilters = [];
+    if (debouncedSearch) {
+      nextFilters.push({ field: "name", operator: "contains" as const, value: debouncedSearch });
+    }
+    if (selectedSubject !== "all") {
+      nextFilters.push({ field: "subject", operator: "eq" as const, value: selectedSubject });
+    }
+    if (selectedTeacher !== "all") {
+      nextFilters.push({ field: "teacher", operator: "eq" as const, value: selectedTeacher });
+    }
+    if (selectedStatus !== "all") {
+      nextFilters.push({ field: "status", operator: "eq" as const, value: selectedStatus });
+    }
+    setFilters(nextFilters, "replace");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, selectedSubject, selectedTeacher, selectedStatus]);
+
+  // Keeps the search/filter controls in sync when `filters` changes from
+  // outside this component's own debounced push above — browser back/forward
+  // navigation, or an external link (e.g. the dashboard's "View full report")
+  // landing on this page with a filter/sort already set.
+  useEffect(() => {
+    setSearchQuery(getFilterValue(filters, "name"));
+    setSelectedSubject(getFilterValue(filters, "subject") || "all");
+    setSelectedTeacher(getFilterValue(filters, "teacher") || "all");
+    setSelectedStatus(getFilterValue(filters, "status") || "all");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
 
   return (
     <ListView>
@@ -216,6 +238,21 @@ const ClassesList = () => {
                 {teachers.map((teacher) => (
                   <SelectItem key={teacher.id} value={teacher.name}>
                     {teacher.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              <SelectTrigger>
+                <SelectValue placeholder="Filter by status ..." />
+              </SelectTrigger>
+
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                {STATUS_OPTIONS.map((status) => (
+                  <SelectItem key={status.value} value={status.value}>
+                    {status.label}
                   </SelectItem>
                 ))}
               </SelectContent>
