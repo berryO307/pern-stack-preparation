@@ -18,9 +18,17 @@ export const authProvider: AuthProvider = {
     // On success this redirects the whole page to the provider's consent
     // screen, so this promise only ever resolves on a pre-redirect failure
     // (e.g. network error) — there's no post-login branch to handle here.
+    //
+    // callbackURL must be absolute: the backend's OAuth callback route uses
+    // this value verbatim as the final redirect Location header, resolved
+    // from wherever the browser currently is at that moment - which is the
+    // backend's own origin (mid-callback), not the frontend's. A relative
+    // "/" landed users on the backend's bare root route in production,
+    // where frontend and backend are different domains (this went
+    // unnoticed in local dev since both run on the same "localhost" site).
     const { error } = await authClient.signIn.social({
       provider,
-      callbackURL: "/",
+      callbackURL: `${window.location.origin}/`,
     });
 
     if (error) {
