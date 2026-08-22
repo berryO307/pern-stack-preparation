@@ -123,7 +123,9 @@ export type Class = {
   bannerCldPubId?: string;
   inviteCode?: string;
   subject?: Subject;
+  department?: Department;
   teacher?: User;
+  enrolledCount?: number;
   createdAt?: string;
   updatedAt?: string;
 };

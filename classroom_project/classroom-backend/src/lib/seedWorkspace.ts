@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { departments, subjects, classes, enrollments, user } from "../db/schema/index.js";
 import { randomUUID } from "crypto";
+import { generateInviteCode } from "./inviteCode.js";
 
 // The same fixture content every workspace gets, so the demo is predictable and
 // reproducible rather than randomized per visitor. Teachers/students are a shared,
@@ -77,7 +78,7 @@ export const seedWorkspace = async (workspaceId: string) => {
                 teacherId,
                 capacity: c.capacity,
                 description: `${c.name.split(" - ")[0]} for the current term.`,
-                inviteCode: Math.random().toString(36).substring(2, 9),
+                inviteCode: await generateInviteCode(workspaceId),
                 schedules: [],
             })
             .returning({ id: classes.id });

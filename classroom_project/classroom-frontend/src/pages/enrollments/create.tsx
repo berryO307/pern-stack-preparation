@@ -1,24 +1,18 @@
 import { CreateView } from "@/components/refine-ui/views/create-view.tsx";
 import { Breadcrumb } from "@/components/refine-ui/layout/breadcrumb.tsx";
-import { Button } from "@/components/ui/button.tsx";
-import { useBack } from "@refinedev/core";
-import { Separator } from "@/components/ui/separator.tsx";
 import EnrollmentForm from "@/pages/enrollments/form.tsx";
 
 const EnrollmentsCreate = () => {
-  const back = useBack();
-
   return (
     <CreateView className="class-view">
       <Breadcrumb />
 
-      <h1 className="page-title">Enroll a Student</h1>
+      <h1 className="page-title">Enroll in a class</h1>
       <div className="intro-row">
-        <p>Assign a student to a class roster.</p>
-        <Button onClick={() => back()}>Go Back</Button>
+        <p>Select a class to enroll as the current user.</p>
       </div>
 
-      <Separator />
+      <h2 className="text-lg font-semibold mt-6">Enrollment form</h2>
 
       <EnrollmentForm />
     </CreateView>

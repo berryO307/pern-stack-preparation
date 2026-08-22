@@ -69,7 +69,11 @@ export const classes = pgTable('classes', {
     index('classes_created_at_idx').on(table.createdAt),
     index('classes_workspace_id_idx').on(table.workspaceId),
     uniqueIndex('classes_workspace_id_invite_code_unique').on(table.workspaceId, table.inviteCode),
-    check('classes_capacity_non_negative', sql`${table.capacity} >= 0`)
+    check('classes_capacity_non_negative', sql`${table.capacity} >= 0`),
+    // Enforced in the DB, not just by generateInviteCode() - the app-level
+    // generator is the only writer today, but the constraint is what
+    // actually guarantees the format can't drift regardless of caller.
+    check('classes_invite_code_format', sql`${table.inviteCode} ~ '^[A-Z]{3}[0-9]{3}$'`),
 ]);
 
 export const enrollments = pgTable('enrollments', {

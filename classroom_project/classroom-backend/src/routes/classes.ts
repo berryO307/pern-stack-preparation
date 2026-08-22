@@ -6,6 +6,7 @@ import {requireAuth} from "../middleware/authorize.js";
 import workspaceMiddleware from "../middleware/workspace.js";
 import {enforceRowQuota} from "../middleware/rowQuota.js";
 import domainWriteRateLimit from "../middleware/domainWriteRateLimit.js";
+import {generateInviteCode} from "../lib/inviteCode.js";
 
 const router = express.Router();
 
@@ -52,7 +53,7 @@ router.post('/', domainWriteRateLimit, enforceRowQuota(classes, classes.workspac
             .insert(classes)
             .values({
                 name, teacherId, subjectId, capacity, description, status, bannerUrl, bannerCldPubId,
-                inviteCode: Math.random().toString(36).substring(2, 9),
+                inviteCode: await generateInviteCode(req.workspaceId!),
                 schedules: [],
                 workspaceId: req.workspaceId!,
             })
@@ -124,9 +125,14 @@ router.get("/", async (req, res) => {
         const classesList = await db.select({
             ...getTableColumns(classes),
             subject: { ...getTableColumns(subjects) },
-            teacher: { ...getTableColumns(user) }
+            department: { ...getTableColumns(departments) },
+            teacher: { ...getTableColumns(user) },
+            // Used by the enrollment combobox to show/disable remaining seats
+            // without a second round trip per class.
+            enrolledCount: sql<number>`(SELECT count(*)::int FROM ${enrollments} WHERE ${enrollments.classId} = ${classes.id})`,
         }).from(classes)
             .leftJoin(subjects, eq(classes.subjectId, subjects.id))
+            .leftJoin(departments, eq(subjects.departmentId, departments.id))
             .leftJoin(user, eq(classes.teacherId, user.id))
             .where(whereClause)
             .orderBy(orderByClause)
