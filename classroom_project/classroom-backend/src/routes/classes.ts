@@ -6,6 +6,7 @@ import {requireAuth} from "../middleware/authorize.js";
 import workspaceMiddleware from "../middleware/workspace.js";
 import {enforceRowQuota} from "../middleware/rowQuota.js";
 import domainWriteRateLimit from "../middleware/domainWriteRateLimit.js";
+import {generateInviteCode} from "../lib/inviteCode.js";
 
 const router = express.Router();
 
@@ -52,7 +53,7 @@ router.post('/', domainWriteRateLimit, enforceRowQuota(classes, classes.workspac
             .insert(classes)
             .values({
                 name, teacherId, subjectId, capacity, description, status, bannerUrl, bannerCldPubId,
-                inviteCode: Math.random().toString(36).substring(2, 9),
+                inviteCode: await generateInviteCode(req.workspaceId!),
                 schedules: [],
                 workspaceId: req.workspaceId!,
             })
