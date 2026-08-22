@@ -80,12 +80,26 @@ export const classSchema = z.object({
   schedules: z.array(scheduleSchema).optional(),
 });
 
+// Client-side is format-only for the invite code - the real (server-side)
+// check is whether the code is actually valid, and shipping the set of
+// valid codes to the browser to check against would make that check
+// decorative. See routes/enrollments.ts for the authoritative chain.
+export const INVITE_CODE_REGEX = /^[A-Z]{3}[0-9]{3}$/;
+
 export const enrollmentSchema = z.object({
   classId: z.coerce
     .number({
-      required_error: "Class ID is required",
-      invalid_type_error: "Class ID is required",
+      required_error: "Select a class",
+      invalid_type_error: "Select a class",
     })
-    .min(1, "Class ID is required"),
-  studentId: z.string().min(1, "Student ID is required"),
+    .min(1, "Select a class"),
+  email: z
+    .string()
+    .min(1, "Email is required")
+    .email("Enter a valid email address")
+    .transform((value) => value.trim().toLowerCase()),
+  inviteCode: z
+    .string()
+    .min(1, "Invite code is required")
+    .regex(INVITE_CODE_REGEX, "Codes are 3 letters followed by 3 digits, like CSE101."),
 });

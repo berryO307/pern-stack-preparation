@@ -125,9 +125,14 @@ router.get("/", async (req, res) => {
         const classesList = await db.select({
             ...getTableColumns(classes),
             subject: { ...getTableColumns(subjects) },
-            teacher: { ...getTableColumns(user) }
+            department: { ...getTableColumns(departments) },
+            teacher: { ...getTableColumns(user) },
+            // Used by the enrollment combobox to show/disable remaining seats
+            // without a second round trip per class.
+            enrolledCount: sql<number>`(SELECT count(*)::int FROM ${enrollments} WHERE ${enrollments.classId} = ${classes.id})`,
         }).from(classes)
             .leftJoin(subjects, eq(classes.subjectId, subjects.id))
+            .leftJoin(departments, eq(subjects.departmentId, departments.id))
             .leftJoin(user, eq(classes.teacherId, user.id))
             .where(whereClause)
             .orderBy(orderByClause)

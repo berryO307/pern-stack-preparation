@@ -87,12 +87,16 @@ const options: CreateDataProviderOptions = {
 
     transformError: async (response) => {
       const body = await response
-        .json<{ error?: string }>()
-        .catch(() => ({}) as { error?: string });
+        .json<{ error?: string; errors?: Record<string, string> }>()
+        .catch(() => ({}) as { error?: string; errors?: Record<string, string> });
 
       return {
         message: body.error ?? "Failed to create record",
         statusCode: response.status,
+        // Refine's react-hook-form binding auto-maps each key here onto the
+        // matching field via setError(), so a 422 with a field-keyed body
+        // needs nothing more on the form side to land on the right input.
+        errors: body.errors,
       };
     },
   },
