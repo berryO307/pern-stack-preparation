@@ -3,14 +3,27 @@ import { ThemeToggle } from "@/components/refine-ui/theme/theme-toggle";
 import { useSidebar, SidebarTrigger } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
-// Search and the user/theme menu live in the sidebar (compact search row +
-// footer user menu) now that the layout has no persistent desktop top bar.
-// The mobile header only needs a way to open the sidebar sheet.
+// Search lives in the sidebar (compact search row) and sign-out lives in the
+// sidebar's footer user menu, but the theme toggle gets its own persistent
+// top-right spot on every page - buried inside the footer user menu, it was
+// easy to miss (had to open that menu just to find it). The mobile header
+// already existed for the sidebar-sheet trigger; it keeps the toggle too.
 export const Header = () => {
   const { isMobile } = useSidebar();
 
-  return <>{isMobile ? <MobileHeader /> : null}</>;
+  return isMobile ? <MobileHeader /> : <DesktopHeader />;
 };
+
+function DesktopHeader() {
+  // h-16 matches the sidebar's own header row (logo + trigger) exactly, so
+  // the two sit flush against each other instead of this bar reading a
+  // visibly different height where they meet.
+  return (
+    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-end border-b border-border bg-sidebar px-4">
+      <ThemeToggle className="h-8 w-8" />
+    </header>
+  );
+}
 
 function MobileHeader() {
   const { open, isMobile } = useSidebar();
@@ -85,3 +98,4 @@ function MobileHeader() {
 
 Header.displayName = "Header";
 MobileHeader.displayName = "MobileHeader";
+DesktopHeader.displayName = "DesktopHeader";

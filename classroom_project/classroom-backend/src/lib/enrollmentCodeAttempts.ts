@@ -1,7 +1,7 @@
 import type { Request } from "express";
 import type { ArcjetNodeRequest } from "@arcjet/node";
 import { tokenBucket } from "@arcjet/node";
-import aj from "../config/arcjet.js";
+import aj, { ARCJET_MODE } from "../config/arcjet.js";
 
 // Rate-limits FAILED invite-code attempts specifically (not every enrollment
 // POST) - a 6-character code is a small space, so an unthrottled code field
@@ -10,7 +10,7 @@ import aj from "../config/arcjet.js";
 // since well-formed/successful submissions shouldn't count against it.
 const codeAttemptClient = aj.withRule(
     tokenBucket({
-        mode: "LIVE",
+        mode: ARCJET_MODE,
         characteristics: ["userId"],
         capacity: 10,
         refillRate: 10,

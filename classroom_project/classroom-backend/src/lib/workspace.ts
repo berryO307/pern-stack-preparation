@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { randomInt } from "crypto";
 import { db } from "../db/index.js";
 import { demoWorkspaces } from "../db/schema/index.js";
 import { seedWorkspace } from "./seedWorkspace.js";
@@ -46,11 +47,19 @@ const provisionWorkspace = async (userId: string, isAdmin: boolean): Promise<Res
 
         if (!created) throw new Error("Workspace insert returned no row");
 
-        await seedWorkspace(created.id);
+        // Generated independently of faker's own RNG (crypto, not
+        // faker.number.int) so the seed itself doesn't depend on faker's
+        // internal state - it's what makes this workspace's data reproducible,
+        // and what a reset regenerates fresh. seedWorkspace may return a
+        // different seed than it was given if this one failed a sanity check
+        // and it retried - the returned value is the one to persist/log.
+        const initialSeed = randomInt(0, 2 ** 31 - 1);
+        const seedValue = await seedWorkspace(created.id, initialSeed);
+        console.log(`Workspace ${created.id} seeded with seed ${seedValue}`);
 
         const [seeded] = await db
             .update(demoWorkspaces)
-            .set({ seededAt: new Date() })
+            .set({ seededAt: new Date(), seedValue })
             .where(eq(demoWorkspaces.id, created.id))
             .returning();
 

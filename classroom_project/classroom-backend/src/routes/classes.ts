@@ -16,8 +16,10 @@ const escapeLike = (value: string) => value.replace(/[%_\\]/g, "\\$&");
 
 // Fill rate isn't a stored column — compute it inline so it's sortable like any
 // other field (used by the dashboard capacity chart's "View full report" link).
+// Only 'active' enrollments occupy a seat - waitlisted/dropped rows exist for
+// realism but must not count against capacity.
 const fillRateExpr = sql`CASE WHEN ${classes.capacity} > 0
-    THEN (SELECT count(*)::numeric FROM ${enrollments} WHERE ${enrollments.classId} = ${classes.id}) / ${classes.capacity}
+    THEN (SELECT count(*)::numeric FROM ${enrollments} WHERE ${enrollments.classId} = ${classes.id} AND ${enrollments.status} = 'active') / ${classes.capacity}
     ELSE 0 END`;
 
 const SORTABLE_CLASS_FIELDS = {
@@ -128,8 +130,9 @@ router.get("/", async (req, res) => {
             department: { ...getTableColumns(departments) },
             teacher: { ...getTableColumns(user) },
             // Used by the enrollment combobox to show/disable remaining seats
-            // without a second round trip per class.
-            enrolledCount: sql<number>`(SELECT count(*)::int FROM ${enrollments} WHERE ${enrollments.classId} = ${classes.id})`,
+            // without a second round trip per class. Only 'active' rows occupy
+            // a seat.
+            enrolledCount: sql<number>`(SELECT count(*)::int FROM ${enrollments} WHERE ${enrollments.classId} = ${classes.id} AND ${enrollments.status} = 'active')`,
         }).from(classes)
             .leftJoin(subjects, eq(classes.subjectId, subjects.id))
             .leftJoin(departments, eq(subjects.departmentId, departments.id))
@@ -185,7 +188,7 @@ router.get('/:id', async (req, res) => {
     const enrolledCountResult = await db
         .select({ count: sql<number>`count(*)` })
         .from(enrollments)
-        .where(eq(enrollments.classId, classId));
+        .where(and(eq(enrollments.classId, classId), eq(enrollments.status, "active")));
 
     res.status(200).json({data: {...classDetail, enrolledCount: Number(enrolledCountResult[0]?.count ?? 0)}});
 })

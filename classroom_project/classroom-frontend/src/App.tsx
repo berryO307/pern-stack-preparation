@@ -1,4 +1,4 @@
-import { Authenticated, Refine, GitHubBanner } from "@refinedev/core";
+import { Authenticated, Refine } from "@refinedev/core";
 import { DevtoolsPanel, DevtoolsProvider } from "@refinedev/devtools";
 
 import { BrowserRouter, Route, Routes, Outlet } from "react-router";
@@ -40,7 +40,6 @@ import { authProvider } from "@/providers/auth.ts";
 function App() {
   return (
     <BrowserRouter>
-      <GitHubBanner />
       <ThemeProvider>
         <DevtoolsProvider>
           <Refine

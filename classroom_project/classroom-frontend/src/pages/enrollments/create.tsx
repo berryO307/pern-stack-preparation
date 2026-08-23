@@ -12,8 +12,6 @@ const EnrollmentsCreate = () => {
         <p>Select a class to enroll as the current user.</p>
       </div>
 
-      <h2 className="text-lg font-semibold mt-6">Enrollment form</h2>
-
       <EnrollmentForm />
     </CreateView>
   );

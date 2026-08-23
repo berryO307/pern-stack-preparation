@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button.tsx";
-import { Card, CardContent } from "@/components/ui/card.tsx";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Separator } from "@/components/ui/separator.tsx";
 import { Alert, AlertDescription } from "@/components/ui/alert.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -129,9 +129,13 @@ const EnrollmentForm = () => {
   };
 
   return (
-    <div className="my-4 flex items-center">
-      <Card className="w-full max-w-xl">
-        <CardContent className="mt-7">
+    <div className="my-4 flex justify-center">
+      <div className="w-full max-w-xl">
+        <Card className="w-full">
+          <CardHeader>
+            <CardTitle className="text-lg">Enrollment form</CardTitle>
+          </CardHeader>
+          <CardContent>
           <Form {...form}>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
               {form.formState.errors.root && (
@@ -292,11 +296,8 @@ const EnrollmentForm = () => {
 
               <Separator />
 
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" size="lg" asChild>
-                  <a href="/enrollments">Cancel</a>
-                </Button>
-                <Button type="submit" size="lg" disabled={formLoading || isSubmitting}>
+              <div className="flex flex-col gap-2">
+                <Button type="submit" size="lg" className="w-full" disabled={formLoading || isSubmitting}>
                   {formLoading || isSubmitting ? (
                     <span className="flex items-center gap-2">
                       Enrolling...
@@ -306,11 +307,15 @@ const EnrollmentForm = () => {
                     "Enroll"
                   )}
                 </Button>
+                <Button type="button" variant="outline" size="lg" className="w-full" asChild>
+                  <a href="/enrollments">Go back</a>
+                </Button>
               </div>
             </form>
           </Form>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

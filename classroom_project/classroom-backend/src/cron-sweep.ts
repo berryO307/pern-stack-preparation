@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { sweepExpiredWorkspaces } from "./lib/cleanup.js";
+import { sweepExpiredWorkspaces, flushVisitorRowsFromPermanentWorkspaces } from "./lib/cleanup.js";
 
 // Entry point for a Railway Cron Job (Project -> New -> Cron Job -> point it at
 // this repo/service). Suggested schedule: "0 0 * * *" (daily, matches the
@@ -11,6 +11,10 @@ import { sweepExpiredWorkspaces } from "./lib/cleanup.js";
 async function main() {
     const removed = await sweepExpiredWorkspaces();
     console.log(`Workspace sweep: removed ${removed} expired workspace(s)`);
+
+    const flushed = await flushVisitorRowsFromPermanentWorkspaces();
+    console.log(`Workspace sweep: flushed ${flushed} visitor-origin row(s) from permanent workspace(s)`);
+
     process.exit(0);
 }
 

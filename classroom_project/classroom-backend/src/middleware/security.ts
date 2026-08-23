@@ -1,5 +1,5 @@
 import type {Response, Request, NextFunction} from "express";
-import aj from '../config/arcjet.js';
+import aj, { ARCJET_MODE } from '../config/arcjet.js';
 import {ArcjetNodeRequest, ArcjetRequest, slidingWindow} from "@arcjet/node";
 
 const securityMiddleware = async (req: Request, res:Response, next: NextFunction) => {
@@ -27,7 +27,7 @@ const securityMiddleware = async (req: Request, res:Response, next: NextFunction
 
        const client = aj.withRule(
            slidingWindow({
-               mode: 'LIVE',
+               mode: ARCJET_MODE,
                interval: '1m',
                max: limit,
            })
