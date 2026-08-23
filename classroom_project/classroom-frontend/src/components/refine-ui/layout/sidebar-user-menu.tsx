@@ -16,7 +16,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.tsx";
 import { useSidebar } from "@/components/ui/sidebar.tsx";
 import { endRumSession } from "@/lib/rum.ts";
-import { cn } from "@/lib/utils.ts";
+import { cn, getInitials } from "@/lib/utils.ts";
 
 type Identity = {
   id: string;
@@ -25,15 +25,6 @@ type Identity = {
   email: string;
   avatar?: string;
   role?: string;
-};
-
-const getInitials = (name = "") => {
-  const names = name.trim().split(/\s+/);
-  let initials = names[0]?.substring(0, 1).toUpperCase() ?? "";
-  if (names.length > 1) {
-    initials += names[names.length - 1]!.substring(0, 1).toUpperCase();
-  }
-  return initials || "?";
 };
 
 export function SidebarUserMenu() {

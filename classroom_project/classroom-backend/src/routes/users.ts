@@ -1,6 +1,6 @@
 import express, { type Request, type Response } from "express";
-import {classes, enrollments, roleEnum, subjects, user} from "../db/schema/index.js";
-import {and, asc, desc, eq, getTableColumns, ilike, or, sql} from "drizzle-orm";
+import {classes, departments, enrollments, roleEnum, subjects, user} from "../db/schema/index.js";
+import {and, asc, desc, eq, getTableColumns, gte, ilike, inArray, lt, or, sql} from "drizzle-orm";
 import {db} from "../db/index.js";
 import {randomUUID} from "crypto";
 import {requireAdmin, requireAuth} from "../middleware/authorize.js";
@@ -23,10 +23,39 @@ const SORTABLE_USER_FIELDS = {
     createdAt: user.createdAt,
 } as const;
 
+// Faculty's list view shows Department instead of Role (every row there is
+// already role=teacher, so Role is dead weight) - department isn't a direct
+// column on `user` since a teacher isn't assigned to one, only inferred from
+// what they teach. This picks each teacher's most-recently-created class in
+// the CALLER's own workspace (classes are workspace-scoped, teacher
+// identities aren't) and returns its department - a single well-defined
+// tiebreak rather than "most frequent", which could tie. Returns a Map so a
+// teacher with no classes yet in this workspace simply has no entry.
+const deriveTeacherDepartments = async (
+    teacherIds: string[],
+    workspaceId: string
+): Promise<Map<string, { id: number; name: string }>> => {
+    if (teacherIds.length === 0) return new Map();
+
+    const rows = await db
+        .selectDistinctOn([classes.teacherId], {
+            teacherId: classes.teacherId,
+            departmentId: departments.id,
+            departmentName: departments.name,
+        })
+        .from(classes)
+        .innerJoin(subjects, eq(classes.subjectId, subjects.id))
+        .innerJoin(departments, eq(subjects.departmentId, departments.id))
+        .where(and(eq(classes.workspaceId, workspaceId), inArray(classes.teacherId, teacherIds)))
+        .orderBy(classes.teacherId, desc(classes.createdAt));
+
+    return new Map(rows.map((r) => [r.teacherId, { id: r.departmentId, name: r.departmentName }]));
+};
+
 // Get all users switch optional search, role filtering and pagination
-router.get("/", async (req, res) => {
+router.get("/", requireAuth, workspaceMiddleware, async (req, res) => {
     try {
-        const { search, role, page = 1, limit = 10, sortField, sortOrder } = req.query;
+        const { search, role, dateFrom, dateTo, page = 1, limit = 10, sortField, sortOrder } = req.query;
 
         const currentPage = Math.max(1, parseInt(String(page), 10) || 1);
         const limitPerPage = Math.min(Math.max(1, parseInt(String(limit), 10) || 10), 100);
@@ -54,6 +83,21 @@ router.get("/", async (req, res) => {
             }
             filterConditions.push(eq(user.role, role));
         }
+        // Date range filters on createdAt (the account's "joined" date) - dateTo
+        // is inclusive of the whole day, so the upper bound is exclusive of the
+        // NEXT day rather than a `lte` against midnight of dateTo itself.
+        if (dateFrom) {
+            const from = new Date(String(dateFrom));
+            if (Number.isNaN(from.getTime())) return res.status(400).json({ error: "Invalid dateFrom" });
+            filterConditions.push(gte(user.createdAt, from));
+        }
+        if (dateTo) {
+            const to = new Date(String(dateTo));
+            if (Number.isNaN(to.getTime())) return res.status(400).json({ error: "Invalid dateTo" });
+            const exclusiveUpperBound = new Date(to);
+            exclusiveUpperBound.setDate(exclusiveUpperBound.getDate() + 1);
+            filterConditions.push(lt(user.createdAt, exclusiveUpperBound));
+        }
         // Combine all filters using AND if any exist
         const whereClause = filterConditions.length > 0 ? and(...filterConditions) : undefined;
         const countResults = await db
@@ -70,8 +114,15 @@ router.get("/", async (req, res) => {
             .limit(limitPerPage)
             .offset(offset);
 
+        const teacherIds = usersList.filter((u) => u.role === "teacher").map((u) => u.id);
+        const departmentByTeacherId = await deriveTeacherDepartments(teacherIds, req.workspaceId!);
+        const usersListWithDepartment = usersList.map((u) => ({
+            ...u,
+            department: departmentByTeacherId.get(u.id) ?? null,
+        }));
+
         res.status(200).json({
-            data: usersList,
+            data: usersListWithDepartment,
             pagination: {
                 page: currentPage,
                 limit: limitPerPage,

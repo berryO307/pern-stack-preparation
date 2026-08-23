@@ -93,7 +93,10 @@ export type User = {
   role: UserRole;
   image?: string;
   imageCldPubId?: string;
-  department?: string;
+  // Only populated for role="teacher" rows, derived server-side (a teacher's
+  // most-recently-created class in the caller's workspace) rather than a
+  // stored assignment - null means they don't teach anything here yet.
+  department?: { id: number; name: string } | null;
 };
 
 export type Schedule = {
