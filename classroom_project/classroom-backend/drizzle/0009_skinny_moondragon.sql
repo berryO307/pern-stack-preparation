@@ -1,0 +1,1 @@
+ALTER TABLE "subjects" ADD COLUMN "image_cld_pub_id" text;

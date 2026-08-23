@@ -99,7 +99,7 @@ router.get("/:id", async (req, res) => {
 
 router.post("/", domainWriteRateLimit, enforceRowQuota(subjects, subjects.workspaceId, "subject"), async (req, res) => {
     try {
-        const { name, code, description, departmentId } = req.body;
+        const { name, code, description, departmentId, imageCldPubId } = req.body;
 
         if (!name || !code || !departmentId) {
             return res.status(400).json({ error: "Name, code and department are required" });
@@ -114,7 +114,7 @@ router.post("/", domainWriteRateLimit, enforceRowQuota(subjects, subjects.worksp
 
         const [createdSubject] = await db
             .insert(subjects)
-            .values({ name, code, description, departmentId: Number(departmentId), workspaceId: req.workspaceId! })
+            .values({ name, code, description, imageCldPubId, departmentId: Number(departmentId), workspaceId: req.workspaceId! })
             .returning();
 
         res.status(201).json({ data: createdSubject });
@@ -135,7 +135,7 @@ router.put("/:id", domainWriteRateLimit, async (req, res) => {
         const subjectId = Number(req.params.id);
         if (!Number.isFinite(subjectId)) return res.status(404).json({ error: "No subject found" });
 
-        const { name, code, description, departmentId } = req.body;
+        const { name, code, description, departmentId, imageCldPubId } = req.body;
 
         if (departmentId !== undefined) {
             const [department] = await db
@@ -152,6 +152,7 @@ router.put("/:id", domainWriteRateLimit, async (req, res) => {
                 name,
                 code,
                 description,
+                imageCldPubId,
                 departmentId: departmentId !== undefined ? Number(departmentId) : undefined,
             })
             .where(and(eq(subjects.id, subjectId), eq(subjects.workspaceId, req.workspaceId!)))

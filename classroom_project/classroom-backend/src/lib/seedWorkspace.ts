@@ -28,10 +28,15 @@ const STUDENT_POOL_SIZE = 140;
 // classes != faculty != subjects (16 subjects, 13 faculty, 21 classes).
 const TEACHER_POOL_SIZE = 13;
 
+// firstName + lastName, not faker.person.fullName() - fullName() randomly
+// mints a prefix ("Dr.", "Mrs.") and/or suffix ("DVM", "PhD") per locale
+// data, which reads as an obvious generator artifact once several fixture
+// people sit in the same table (one plain "Cleo Zemlak" next to "Taurean
+// Mertz DVM"). One clean convention, no credential noise.
 const buildNamePool = (size: number, poolSeed: number): string[] => {
     faker.seed(poolSeed);
     const names = new Set<string>();
-    while (names.size < size) names.add(faker.person.fullName());
+    while (names.size < size) names.add(`${faker.person.firstName()} ${faker.person.lastName()}`);
     return [...names];
 };
 
@@ -120,16 +125,26 @@ const DEPARTMENT_CATALOG: DepartmentDef[] = [
 // ---- Section layout ----------------------------------------------------
 // Most subjects get one lecture section; the two intro CS courses and the
 // management course also get a lab/seminar, so class names aren't all
-// identically-shaped "X - Section A" rows.
+// identically-shaped "X - Section A" rows. A handful of single-section
+// subjects also get a suffix other than "Section A" - not because they have
+// a second section, but so the catalog doesn't read as one suffix
+// mechanically repeated down every row without an actual lab/seminar to
+// justify it.
 type SectionKind = { suffix: string; capacityRange: [number, number] };
 const LECTURE_A: SectionKind = { suffix: "Section A", capacityRange: [70, 120] };
 const SINGLE_SECTION: SectionKind = { suffix: "Section A", capacityRange: [45, 90] };
 const LAB: SectionKind = { suffix: "Lab", capacityRange: [20, 32] };
 const SEMINAR: SectionKind = { suffix: "Seminar", capacityRange: [20, 35] };
+const STUDIO: SectionKind = { suffix: "Studio", capacityRange: [45, 90] };
+const EVENING: SectionKind = { suffix: "Evening", capacityRange: [45, 90] };
+const HONOURS: SectionKind = { suffix: "Honours", capacityRange: [45, 90] };
 
 const sectionsFor = (subjectCode: string): SectionKind[] => {
     if (subjectCode === "CS101" || subjectCode === "CS201" || subjectCode === "CS410") return [LECTURE_A, LAB];
     if (subjectCode === "BUS150" || subjectCode === "BUS240") return [LECTURE_A, SEMINAR];
+    if (subjectCode === "ART105") return [STUDIO];
+    if (subjectCode === "PSY220") return [EVENING];
+    if (subjectCode === "MATH310") return [HONOURS];
     return [SINGLE_SECTION];
 };
 
@@ -201,6 +216,16 @@ const pickWeekdayLeaningDate = (start: Date, end: Date): Date => {
 };
 
 // ---- Plan generation ------------------------------------------------------
+type ClassStatus = "active" | "inactive" | "archived";
+
+// Mostly active, a few inactive, one or two archived - a status column
+// where every value is identical is dead weight on the list page.
+const CLASS_STATUS_WEIGHTS: { value: ClassStatus; weight: number }[] = [
+    { value: "active", weight: 82 },
+    { value: "inactive", weight: 13 },
+    { value: "archived", weight: 5 },
+];
+
 type PlanClass = {
     departmentCode: string;
     subjectCode: string;
@@ -209,6 +234,7 @@ type PlanClass = {
     inviteCode: string;
     teacherIndex: number;
     fillTarget: number;
+    status: ClassStatus;
 };
 
 type EnrollmentStatus = "active" | "waitlisted" | "dropped";
@@ -267,11 +293,14 @@ const generateSeedPlan = (seed: number): SeedPlan => {
         for (const subject of dept.subjects) {
             for (const section of sectionsFor(subject.code)) {
                 const [min, max] = section.capacityRange;
-                const capacity = Math.round(faker.number.int({ min, max }) / 5) * 5;
+                // Raw, unrounded - rounding every capacity to a multiple of
+                // 5 was what made the column look generated rather than real.
+                const capacity = faker.number.int({ min, max });
                 const fillTarget = FILL_TARGETS[fillIndex++];
                 if (fillTarget === undefined) {
                     throw new Error("FILL_TARGETS is shorter than the generated class count");
                 }
+                const status = faker.helpers.weightedArrayElement(CLASS_STATUS_WEIGHTS);
                 classesPlan.push({
                     departmentCode: dept.code,
                     subjectCode: subject.code,
@@ -280,6 +309,7 @@ const generateSeedPlan = (seed: number): SeedPlan => {
                     inviteCode: planInviteCode(usedCodes),
                     teacherIndex: classesPlan.length % TEACHER_NAMES.length,
                     fillTarget,
+                    status,
                 });
             }
         }
@@ -432,6 +462,7 @@ export const seedWorkspace = async (workspaceId: string, initialSeed: number): P
                 subjectId: subjectIds[cls.subjectCode]!,
                 teacherId: teacherIds[cls.teacherIndex]!,
                 capacity: cls.capacity,
+                status: cls.status,
                 description: `${cls.name.split(" - ")[0]} for the current term.`,
                 inviteCode: cls.inviteCode,
                 schedules: [],

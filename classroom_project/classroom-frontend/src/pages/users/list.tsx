@@ -19,7 +19,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover.tsx";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar.tsx";
+import { PersonCell } from "@/components/person-cell.tsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,7 +45,6 @@ import { User } from "@/types";
 import { useDebouncedValue } from "@/hooks/use-debounced-value.ts";
 import { getFilterValue } from "@/lib/filters.ts";
 import { useIsAdmin } from "@/hooks/use-is-admin.ts";
-import { getInitials } from "@/lib/utils.ts";
 import { buildAvatarSrc } from "@/lib/cloudinary.ts";
 import { trackRumEvent, reportRumError } from "@/lib/rum.ts";
 
@@ -164,20 +163,8 @@ const UsersList = ({
             const name = getValue<string>();
             const avatarSrc = buildAvatarSrc(row.original.imageCldPubId, row.original.image);
             return (
-              <Link to={showUrl("users", row.original.id)} className="flex items-center gap-2 ml-2">
-                <Avatar className="h-8 w-8">
-                  {avatarSrc && (
-                    <AvatarImage
-                      src={avatarSrc}
-                      alt=""
-                      loading="lazy"
-                      width={80}
-                      height={80}
-                    />
-                  )}
-                  <AvatarFallback>{getInitials(name)}</AvatarFallback>
-                </Avatar>
-                <span className="truncate font-medium text-foreground">{name}</span>
+              <Link to={showUrl("users", row.original.id)} className="ml-2 inline-block">
+                <PersonCell name={name} avatarSrc={avatarSrc} />
               </Link>
             );
           },
