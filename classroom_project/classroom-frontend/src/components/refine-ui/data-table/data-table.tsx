@@ -4,26 +4,46 @@ import type { HttpError, BaseRecord } from "@refinedev/core";
 import type { UseTableReturnType } from "@refinedev/react-table";
 import type { Column } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
-import { Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import {
   Table,
   TableBody,
+  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { DataTablePagination } from "@/components/refine-ui/data-table/data-table-pagination";
 import { cn } from "@/lib/utils";
 
 type DataTableProps<TData extends BaseRecord> = {
   table: UseTableReturnType<TData, HttpError>;
+  /** Screen-reader-only table description (e.g. "Faculty members"). */
+  caption?: string;
+  /** Noun for the empty-state copy, e.g. "faculty members". Defaults to "data". */
+  emptyStateLabel?: string;
+  /** Rendered in the empty state when there's genuinely no data yet (e.g. a Create button). */
+  emptyStateAction?: React.ReactNode;
+  /**
+   * True when the current zero-row result is because of an active
+   * search/filter, not because the table is actually empty - these need
+   * different copy, or a filtered demo table permanently reads as broken.
+   */
+  hasActiveFilters?: boolean;
+  onClearFilters?: () => void;
 };
 
 export function DataTable<TData extends BaseRecord>({
   table,
+  caption,
+  emptyStateLabel,
+  emptyStateAction,
+  hasActiveFilters,
+  onClearFilters,
 }: DataTableProps<TData>) {
   const {
     reactTable: { getHeaderGroups, getRowModel, getAllColumns },
@@ -33,7 +53,6 @@ export function DataTable<TData extends BaseRecord>({
       setCurrentPage,
       pageCount,
       pageSize,
-      setPageSize,
     },
   } = table;
 
@@ -80,17 +99,19 @@ export function DataTable<TData extends BaseRecord>({
 
   return (
     <div className={cn("flex", "flex-col", "flex-1", "gap-4")}>
-      <div ref={tableContainerRef} className={cn("rounded-md", "border")}>
+      <div ref={tableContainerRef} className={cn("rounded-lg", "border")}>
         <Table ref={tableRef} style={{ tableLayout: "fixed", width: "100%" }}>
+          {caption && <TableCaption className="sr-only">{caption}</TableCaption>}
           <TableHeader>
             {getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
+              <TableRow key={headerGroup.id} className="bg-muted/50 hover:bg-muted/50">
                 {headerGroup.headers.map((header) => {
                   const isPlaceholder = header.isPlaceholder;
 
                   return (
                     <TableHead
                       key={header.id}
+                      scope="col"
                       style={{
                         ...getCommonStyles({
                           column: header.column,
@@ -114,57 +135,39 @@ export function DataTable<TData extends BaseRecord>({
           </TableHeader>
           <TableBody className="relative">
             {isLoading ? (
-              <>
-                {Array.from({ length: pageSize < 1 ? 1 : pageSize }).map(
-                  (_, rowIndex) => (
-                    <TableRow
-                      key={`skeleton-row-${rowIndex}`}
-                      aria-hidden="true"
-                    >
-                      {leafColumns.map((column) => (
-                        <TableCell
-                          key={`skeleton-cell-${rowIndex}-${column.id}`}
-                          style={{
-                            ...getCommonStyles({
-                              column,
-                              isOverflowing: isOverflowing,
-                            }),
-                          }}
-                          className={cn("truncate")}
-                        >
-                          <div className="h-8" />
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  )
-                )}
-                <TableRow>
-                  <TableCell
-                    colSpan={columns.length}
-                    className={cn("absolute", "inset-0", "pointer-events-none")}
-                  >
-                    <Loader2
-                      className={cn(
-                        "absolute",
-                        "top-1/2",
-                        "left-1/2",
-                        "animate-spin",
-                        "text-primary",
-                        "h-8",
-                        "w-8",
-                        "-translate-x-1/2",
-                        "-translate-y-1/2"
-                      )}
-                    />
-                  </TableCell>
-                </TableRow>
-              </>
+              // Real skeleton placeholders at the final row height, not a
+              // spinner over blank space - nothing shifts once data arrives,
+              // since these rows already reserve exactly as much room.
+              Array.from({ length: pageSize < 1 ? 1 : pageSize }).map(
+                (_, rowIndex) => (
+                  <TableRow key={`skeleton-row-${rowIndex}`} aria-hidden="true">
+                    {leafColumns.map((column) => (
+                      <TableCell
+                        key={`skeleton-cell-${rowIndex}-${column.id}`}
+                        style={{
+                          ...getCommonStyles({
+                            column,
+                            isOverflowing: isOverflowing,
+                          }),
+                        }}
+                        className={cn("truncate")}
+                      >
+                        <Skeleton className="h-4 w-3/4" />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                )
+              )
             ) : getRowModel().rows?.length ? (
-              getRowModel().rows.map((row) => {
+              getRowModel().rows.map((row, rowIndex) => {
                 return (
                   <TableRow
                     key={row.original?.id ?? row.id}
                     data-state={row.getIsSelected() && "selected"}
+                    // Zebra tint on even rows, kept visually distinct from the
+                    // hover state (a stronger tint) rather than the same
+                    // shade, or hovering would look identical to resting.
+                    className={rowIndex % 2 === 1 ? "bg-muted/30" : undefined}
                   >
                     {row.getVisibleCells().map((cell) => {
                       return (
@@ -193,6 +196,10 @@ export function DataTable<TData extends BaseRecord>({
               <DataTableNoData
                 isOverflowing={isOverflowing}
                 columnsLength={columns.length}
+                emptyStateLabel={emptyStateLabel}
+                emptyStateAction={emptyStateAction}
+                hasActiveFilters={hasActiveFilters}
+                onClearFilters={onClearFilters}
               />
             )}
           </TableBody>
@@ -203,9 +210,6 @@ export function DataTable<TData extends BaseRecord>({
           currentPage={currentPage}
           pageCount={pageCount}
           setCurrentPage={setCurrentPage}
-          pageSize={pageSize}
-          setPageSize={setPageSize}
-          total={tableQuery.data?.total}
         />
       )}
     </div>
@@ -215,10 +219,37 @@ export function DataTable<TData extends BaseRecord>({
 function DataTableNoData({
   isOverflowing,
   columnsLength,
+  emptyStateLabel,
+  emptyStateAction,
+  hasActiveFilters,
+  onClearFilters,
 }: {
   isOverflowing: { horizontal: boolean; vertical: boolean };
   columnsLength: number;
+  emptyStateLabel?: string;
+  emptyStateAction?: React.ReactNode;
+  hasActiveFilters?: boolean;
+  onClearFilters?: () => void;
 }) {
+  // Two different messages on purpose - a filtered view returning zero rows
+  // isn't the same situation as a table that's actually empty, and
+  // conflating them is what makes a filtered demo table look broken.
+  const { title, subtitle, action } = hasActiveFilters
+    ? {
+        title: "No results match your filters",
+        subtitle: "Try a different search or adjust your filters.",
+        action: onClearFilters ? (
+          <Button variant="outline" size="sm" onClick={onClearFilters}>
+            Clear filters
+          </Button>
+        ) : null,
+      }
+    : {
+        title: `No ${emptyStateLabel ?? "data"} yet`,
+        subtitle: "This table is empty for the time being.",
+        action: emptyStateAction ?? null,
+      };
+
   return (
     <TableRow className="hover:bg-transparent">
       <TableCell
@@ -246,12 +277,9 @@ function DataTableNoData({
             minWidth: "300px",
           }}
         >
-          <div className={cn("text-lg", "font-semibold", "text-foreground")}>
-            No data to display
-          </div>
-          <div className={cn("text-sm", "text-muted-foreground")}>
-            This table is empty for the time being.
-          </div>
+          <div className={cn("text-lg", "font-semibold", "text-foreground")}>{title}</div>
+          <div className={cn("text-sm", "text-muted-foreground")}>{subtitle}</div>
+          {action && <div className="mt-2">{action}</div>}
         </div>
       </TableCell>
     </TableRow>

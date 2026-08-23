@@ -40,6 +40,8 @@ const options: CreateDataProviderOptions = {
         if (resource === "users") {
           if (field === "role") params.role = value;
           if (field === "name" || field === "email") params.search = value;
+          if (field === "createdAtFrom") params.dateFrom = value;
+          if (field === "createdAtTo") params.dateTo = value;
         }
 
         if (resource === "classes") {

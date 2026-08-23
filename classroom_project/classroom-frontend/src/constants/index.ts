@@ -70,7 +70,14 @@ const getEnvVar = (key: string): string => {
 
 export const CLOUDINARY_UPLOAD_URL = getEnvVar("VITE_CLOUDINARY_UPLOAD_URL");
 export const CLOUDINARY_CLOUD_NAME = getEnvVar("VITE_CLOUDINARY_CLOUD_NAME");
-export const BACKEND_BASE_URL = getEnvVar("VITE_BACKEND_BASE_URL");
+
+// Every call site does `${BACKEND_BASE_URL}some/path` (plain string
+// concatenation, not a URL-joining helper), so this has to be guaranteed to
+// end in exactly one "/" regardless of how the env var itself was set - a
+// value without a trailing slash silently produces bugs like
+// "https://host/apidashboard/summary" (404) instead of ".../api/dashboard/summary".
+const rawBackendBaseUrl = getEnvVar("VITE_BACKEND_BASE_URL");
+export const BACKEND_BASE_URL = rawBackendBaseUrl.endsWith("/") ? rawBackendBaseUrl : `${rawBackendBaseUrl}/`;
 
 export const BASE_URL = import.meta.env.VITE_API_URL;
 export const ACCESS_TOKEN_KEY = import.meta.env.VITE_ACCESS_TOKEN_KEY;

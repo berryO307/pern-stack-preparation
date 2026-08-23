@@ -17,7 +17,16 @@ import { faker } from "@faker-js/faker";
 // student twice, though the same student can enroll across different classes.
 const NAME_POOL_SEED = 42;
 const STUDENT_POOL_SIZE = 140;
-const TEACHER_POOL_SIZE = 10;
+// Deliberately LESS than the catalog's own class count (14), never equal to
+// it: the round-robin teacher-to-class assignment below needs
+// teacherCount <= classCount for every teacher to land a real class (and
+// therefore a real Department, rather than "—"), but teacherCount ==
+// classCount was tried first and makes the "classes" and "faculty" KPI
+// numbers structurally identical every time - not a rare collision a seed
+// retry can fix, a permanent one, since both are always exactly 14. 13 keeps
+// every teacher assigned (one teacher just teaches two classes) while
+// keeping classes != faculty.
+const TEACHER_POOL_SIZE = 13;
 
 const buildNamePool = (size: number, poolSeed: number): string[] => {
     faker.seed(poolSeed);
@@ -33,6 +42,17 @@ const slugify = (name: string) => name.toLowerCase().replace(/[^a-z]+/g, ".");
 // Reserved, non-routable domain - never a real institution's - so seeded
 // fixture emails can never collide with or be mistaken for a live address.
 const fixtureEmail = (name: string) => `${slugify(name)}@example.edu`;
+
+// DiceBear is a dedicated, open-source avatar-generation service (MIT-
+// licensed, no API key, no real person's likeness) - not a random photo
+// hotlinked from search results, which is what the "URL rot / unclear
+// licensing" concern about placeholder avatars is actually about. Seeding on
+// email (already stable and unique per fixture person) makes every fixture
+// person's avatar deterministic and reproducible, matching how the rest of
+// this seed data works - the same person always gets the same illustrated
+// avatar across every reseed.
+const buildFixtureAvatarUrl = (seed: string): string =>
+    `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(seed)}&radius=50`;
 
 // ---- Department / subject catalog ------------------------------------------
 // Unequal sizes by design (one large, two mid, one small department, counted
@@ -84,8 +104,8 @@ const LAB: SectionKind = { suffix: "Lab", capacityRange: [20, 32] };
 const SEMINAR: SectionKind = { suffix: "Seminar", capacityRange: [20, 35] };
 
 const sectionsFor = (subjectCode: string): SectionKind[] => {
-    if (subjectCode === "CS101" || subjectCode === "CS201") return [LECTURE_A, LAB];
-    if (subjectCode === "BUS150") return [LECTURE_A, SEMINAR];
+    if (subjectCode === "CS101" || subjectCode === "CS201" || subjectCode === "CS410") return [LECTURE_A, LAB];
+    if (subjectCode === "BUS150" || subjectCode === "BUS240") return [LECTURE_A, SEMINAR];
     return [SINGLE_SECTION];
 };
 
@@ -96,8 +116,8 @@ const sectionsFor = (subjectCode: string): SectionKind[] => {
 // capacity_bucketed CTE) is always non-empty and the overall skew matches the
 // brief (most 55-90%, a couple nearly empty, one at capacity). Length must
 // match the total class count produced by DEPARTMENT_CATALOG + sectionsFor
-// (12 today) - assertSeedPlanSanity below catches a mismatch either way.
-const FILL_TARGETS = [0.06, 0.18, 0.32, 0.48, 0.62, 0.65, 0.7, 0.74, 0.78, 0.85, 0.92, 1.0];
+// (14 today) - assertSeedPlanSanity below catches a mismatch either way.
+const FILL_TARGETS = [0.05, 0.15, 0.28, 0.42, 0.55, 0.61, 0.64, 0.67, 0.7, 0.73, 0.76, 0.82, 0.9, 1.0];
 
 // ---- Invite codes --------------------------------------------------------
 // Seeded classes get their own in-memory generator (rather than
@@ -298,7 +318,16 @@ async function upsertFixtureUsers(names: string[], role: "teacher" | "student"):
     if (missing.length > 0) {
         await db
             .insert(user)
-            .values(missing.map((row) => ({ id: row.id, name: row.name, email: row.email, role, emailVerified: true })))
+            .values(
+                missing.map((row) => ({
+                    id: row.id,
+                    name: row.name,
+                    email: row.email,
+                    role,
+                    emailVerified: true,
+                    image: buildFixtureAvatarUrl(row.email),
+                })),
+            )
             .onConflictDoNothing({ target: user.email });
 
         // A concurrent provision may have won the race on some emails since
