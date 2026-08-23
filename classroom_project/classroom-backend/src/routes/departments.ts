@@ -24,7 +24,7 @@ router.use(requireAuth, workspaceMiddleware);
 // Get all departments with optional search, sorting and pagination
 router.get("/", async (req, res) => {
     try {
-        const { search, page = 1, limit = 10, sortField, sortOrder } = req.query;
+        const { search, hasSubjects, page = 1, limit = 10, sortField, sortOrder } = req.query;
 
         const currentPage = Math.max(1, parseInt(String(page), 10) || 1);
         const limitPerPage = Math.min(Math.max(1, parseInt(String(limit), 10) || 10), 100);
@@ -47,14 +47,17 @@ router.get("/", async (req, res) => {
         }
         const whereClause = and(...filterConditions);
 
-        const countResults = await db
-            .select({ count: sql<number>`count(*)` })
-            .from(departments)
-            .where(whereClause);
+        // subjectCount is a grouped aggregate, so filtering on it needs
+        // HAVING rather than WHERE - and since HAVING makes a plain COUNT(*)
+        // query wrong (it'd count rows before the aggregate filter applies),
+        // pagination is derived from this same grouped result instead of a
+        // second query. Fine at this scale: a workspace has a handful of
+        // departments, never thousands.
+        let havingClause;
+        if (hasSubjects === "true") havingClause = sql`count(${subjects.id}) > 0`;
+        if (hasSubjects === "false") havingClause = sql`count(${subjects.id}) = 0`;
 
-        const totalCount = countResults[0]?.count ?? 0;
-
-        const departmentsList = await db
+        const allMatching = await db
             .select({
                 ...getTableColumns(departments),
                 subjectCount: sql<number>`count(${subjects.id})`,
@@ -63,9 +66,11 @@ router.get("/", async (req, res) => {
             .leftJoin(subjects, eq(subjects.departmentId, departments.id))
             .where(whereClause)
             .groupBy(departments.id)
-            .orderBy(orderByClause)
-            .limit(limitPerPage)
-            .offset(offset);
+            .having(havingClause)
+            .orderBy(orderByClause);
+
+        const totalCount = allMatching.length;
+        const departmentsList = allMatching.slice(offset, offset + limitPerPage);
 
         res.status(200).json({
             data: departmentsList,

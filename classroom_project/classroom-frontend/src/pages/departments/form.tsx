@@ -8,6 +8,7 @@ import {
 import { Separator } from "@/components/ui/separator.tsx";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "@refinedev/react-hook-form";
+import { useBack } from "@refinedev/core";
 import { departmentSchema } from "@/lib/schema.ts";
 import * as z from "zod";
 import {
@@ -27,6 +28,7 @@ type DepartmentFormProps = {
 };
 
 const DepartmentForm = ({ action }: DepartmentFormProps) => {
+  const back = useBack();
   const form = useForm({
     resolver: zodResolver(departmentSchema),
     refineCoreProps: {
@@ -56,7 +58,7 @@ const DepartmentForm = ({ action }: DepartmentFormProps) => {
       <Card className="class-form-card">
         <CardHeader className="relative z-10">
           <CardTitle className="text-2xl pb-0 font-bold text-gradient-orange">
-            Fill out form
+            {action === "edit" ? "Edit Department" : "Create Department"}
           </CardTitle>
         </CardHeader>
 
@@ -121,27 +123,39 @@ const DepartmentForm = ({ action }: DepartmentFormProps) => {
 
               <Separator />
 
-              <Button
-                type="submit"
-                size="lg"
-                className="w-full"
-                disabled={formLoading || isLoadingRecord}
-              >
-                {formLoading ? (
-                  <div className="flex gap-1">
-                    <span>
-                      {action === "create"
-                        ? "Creating Department..."
-                        : "Saving Changes..."}
-                    </span>
-                    <Loader2 className="inline-block ml-2 animate-spin" />
-                  </div>
-                ) : action === "create" ? (
-                  "Create Department"
-                ) : (
-                  "Save Changes"
-                )}
-              </Button>
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="flex-1"
+                  onClick={() => back()}
+                  disabled={formLoading}
+                >
+                  Back
+                </Button>
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="flex-1"
+                  disabled={formLoading || isLoadingRecord}
+                >
+                  {formLoading ? (
+                    <div className="flex gap-1">
+                      <span>
+                        {action === "create"
+                          ? "Creating Department..."
+                          : "Saving Changes..."}
+                      </span>
+                      <Loader2 className="inline-block ml-2 animate-spin" />
+                    </div>
+                  ) : action === "create" ? (
+                    "Create Department"
+                  ) : (
+                    "Save Changes"
+                  )}
+                </Button>
+              </div>
             </form>
           </Form>
         </CardContent>

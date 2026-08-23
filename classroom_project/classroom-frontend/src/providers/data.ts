@@ -54,6 +54,7 @@ const options: CreateDataProviderOptions = {
 
         if (resource === "departments") {
           if (field === "name" || field === "code") params.search = value;
+          if (field === "hasSubjects") params.hasSubjects = value;
         }
 
         if (resource === "enrollments") {
