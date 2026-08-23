@@ -17,7 +17,7 @@ import { faker } from "@faker-js/faker";
 // student twice, though the same student can enroll across different classes.
 const NAME_POOL_SEED = 42;
 const STUDENT_POOL_SIZE = 140;
-// Deliberately LESS than the catalog's own class count (17), never equal to
+// Deliberately LESS than the catalog's own class count (21), never equal to
 // it: the round-robin teacher-to-class assignment below needs
 // teacherCount <= classCount for every teacher to land a real class (and
 // therefore a real Department, rather than "—"), but teacherCount ==
@@ -25,7 +25,7 @@ const STUDENT_POOL_SIZE = 140;
 // numbers structurally identical every time - not a rare collision a seed
 // retry can fix, a permanent one, since both would always be equal. 13 keeps
 // every teacher assigned (several teach more than one class) while keeping
-// classes != faculty != subjects (12 subjects, 13 faculty, 17 classes).
+// classes != faculty != subjects (16 subjects, 13 faculty, 21 classes).
 const TEACHER_POOL_SIZE = 13;
 
 const buildNamePool = (size: number, poolSeed: number): string[] => {
@@ -94,6 +94,27 @@ const DEPARTMENT_CATALOG: DepartmentDef[] = [
             { code: "ART105", name: "Studio Foundations", description: "Drawing, composition, and materials." },
         ],
     },
+    {
+        code: "PHYS", name: "Physics", description: "Matter, energy, and the laws that govern them.",
+        subjects: [
+            { code: "PHYS101", name: "Introduction to Physics", description: "Mechanics, motion, and the fundamentals of force." },
+            { code: "PHYS210", name: "Electromagnetism", description: "Electric fields, circuits, and magnetic forces." },
+        ],
+    },
+    {
+        code: "PSY", name: "Psychology", description: "Mind, behavior, and cognition.",
+        subjects: [
+            { code: "PSY101", name: "Introduction to Psychology", description: "Behavior, mind, and the foundations of psychological science." },
+            { code: "PSY220", name: "Cognitive Psychology", description: "Memory, perception, and decision-making." },
+        ],
+    },
+    // Deliberately empty - gives the Departments "Has subjects" filter (and
+    // its show page's empty state) a real case to demonstrate, not just a
+    // hypothetical one.
+    {
+        code: "ENV", name: "Environmental Science", description: "Sustainability, ecosystems, and environmental policy.",
+        subjects: [],
+    },
 ];
 
 // ---- Section layout ----------------------------------------------------
@@ -119,8 +140,11 @@ const sectionsFor = (subjectCode: string): SectionKind[] => {
 // capacity_bucketed CTE) is always non-empty and the overall skew matches the
 // brief (most 55-90%, a couple nearly empty, one at capacity). Length must
 // match the total class count produced by DEPARTMENT_CATALOG + sectionsFor
-// (17 today) - assertSeedPlanSanity below catches a mismatch either way.
-const FILL_TARGETS = [0.05, 0.15, 0.28, 0.42, 0.5, 0.58, 0.62, 0.65, 0.68, 0.72, 0.76, 0.6, 0.66, 0.7, 0.74, 0.83, 1.0];
+// (21 today) - assertSeedPlanSanity below catches a mismatch either way.
+const FILL_TARGETS = [
+    0.05, 0.15, 0.28, 0.42, 0.5, 0.58, 0.62, 0.65, 0.68, 0.72, 0.76, 0.6, 0.66, 0.7, 0.74, 0.83, 1.0,
+    0.58, 0.7, 0.64, 0.48,
+];
 
 // ---- Invite codes --------------------------------------------------------
 // Seeded classes get their own in-memory generator (rather than

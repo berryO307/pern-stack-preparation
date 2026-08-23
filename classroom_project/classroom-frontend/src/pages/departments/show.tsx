@@ -17,7 +17,7 @@ const Show = () => {
   if (isLoading || isError || !department) {
     return (
       <ShowView className="class-view class-show">
-        <ShowViewHeader resource="departments" title="department details" />
+        <ShowViewHeader resource="departments" title="Department Details" />
 
         <p className="state-message">
           {isLoading
@@ -34,7 +34,10 @@ const Show = () => {
 
   return (
     <ShowView className="class-view class-show">
-      <ShowViewHeader resource="departments" title="department details" />
+      <ShowViewHeader resource="departments" title="Department Details" />
+      <p className="text-sm text-muted-foreground -mt-2">
+        Full profile for this department, including every subject it currently offers.
+      </p>
 
       <Card className="details-card">
         <div className="details-header">
