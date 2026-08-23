@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import type { ArcjetNodeRequest } from "@arcjet/node";
 import { tokenBucket } from "@arcjet/node";
-import aj from "../config/arcjet.js";
+import aj, { ARCJET_MODE } from "../config/arcjet.js";
 
 // Throttles the RATE of writes to departments/subjects/classes/enrollments,
 // independent of the row-quota backstop in rowQuota.ts (which bounds total
@@ -9,7 +9,7 @@ import aj from "../config/arcjet.js";
 // scripted insert/update/delete loop, even while comfortably under quota.
 const writeClient = aj.withRule(
     tokenBucket({
-        mode: "LIVE",
+        mode: ARCJET_MODE,
         characteristics: ["userId"],
         capacity: 20,
         refillRate: 20,

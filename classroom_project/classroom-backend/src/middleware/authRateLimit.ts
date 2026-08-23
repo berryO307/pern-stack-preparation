@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import type { ArcjetNodeRequest } from "@arcjet/node";
 import { fixedWindow } from "@arcjet/node";
-import aj from "../config/arcjet.js";
+import aj, { ARCJET_MODE } from "../config/arcjet.js";
 
 // Tighter than the generic per-role window in security.ts, specifically for
 // /api/auth/* - OAuth sign-in/callback/session-check churn from a single IP
@@ -11,7 +11,7 @@ import aj from "../config/arcjet.js";
 // global rules (shield/detectBot/sliding window) rather than replacing them.
 const authClient = aj.withRule(
     fixedWindow({
-        mode: "LIVE",
+        mode: ARCJET_MODE,
         window: "1m",
         max: 10,
     })

@@ -15,6 +15,15 @@ export type ClassSchedule = {
 };
 
 export const classStatusEnum = pgEnum('class_status', ['active', 'inactive', 'archived']);
+export const enrollmentStatusEnum = pgEnum('enrollment_status', ['active', 'waitlisted', 'dropped']);
+// Every visitor-writable table carries this. The fixture generator is the only
+// writer of 'seed'; every app write path leaves it at its default ('user') -
+// so a write path that forgets to think about origin still fails safe
+// (flushable), rather than silently becoming permanent. Never accept this
+// value from a request body - see routes/*.ts, which all build insert values
+// from an explicit field list rather than spreading req.body, so a client
+// can't smuggle 'seed' in to make a row un-flushable.
+export const originEnum = pgEnum('origin', ['seed', 'user']);
 
 export const departments = pgTable('departments', {
     id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
@@ -26,10 +35,12 @@ export const departments = pgTable('departments', {
     code: varchar('code', {length: 50}).notNull(),
     name: varchar('name', {length:255}).notNull(),
     description: varchar('description', {length: 255}),
+    origin: originEnum('origin').notNull().default('user'),
     ...timestamps
 }, (table) => [
     index('departments_created_at_idx').on(table.createdAt),
     index('departments_workspace_id_idx').on(table.workspaceId),
+    index('departments_workspace_id_origin_idx').on(table.workspaceId, table.origin),
     uniqueIndex('departments_workspace_id_code_unique').on(table.workspaceId, table.code),
 ]);
 
@@ -40,11 +51,13 @@ export const subjects = pgTable('subjects', {
     name: varchar('name', {length:255}).notNull(),
     code: varchar('code', {length: 50}).notNull(),
     description: varchar('description', {length: 255}),
+    origin: originEnum('origin').notNull().default('user'),
     ...timestamps
 }, (table) => [
     index('subjects_created_at_idx').on(table.createdAt),
     index('subjects_department_id_idx').on(table.departmentId),
     index('subjects_workspace_id_idx').on(table.workspaceId),
+    index('subjects_workspace_id_origin_idx').on(table.workspaceId, table.origin),
     uniqueIndex('subjects_workspace_id_code_unique').on(table.workspaceId, table.code),
 ]);
 
@@ -62,12 +75,14 @@ export const classes = pgTable('classes', {
     capacity: integer('capacity').notNull().default(50),
     status: classStatusEnum('status').notNull().default('active'),
     schedules: jsonb('schedules').$type<ClassSchedule[]>(),
+    origin: originEnum('origin').notNull().default('user'),
     ...timestamps
 }, (table) => [
     index('classes_subject_id_idx').on(table.subjectId),
     index('classes_teacher_id_idx').on(table.teacherId),
     index('classes_created_at_idx').on(table.createdAt),
     index('classes_workspace_id_idx').on(table.workspaceId),
+    index('classes_workspace_id_origin_idx').on(table.workspaceId, table.origin),
     uniqueIndex('classes_workspace_id_invite_code_unique').on(table.workspaceId, table.inviteCode),
     check('classes_capacity_non_negative', sql`${table.capacity} >= 0`),
     // Enforced in the DB, not just by generateInviteCode() - the app-level
@@ -82,6 +97,11 @@ export const enrollments = pgTable('enrollments', {
     studentId: text('student_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
     classId: integer('class_id').notNull().references(() => classes.id, { onDelete: 'cascade' }),
     workspaceId: uuid('workspace_id').notNull().references(() => demoWorkspaces.id, { onDelete: 'cascade' }),
+    // Only 'active' rows occupy a seat - capacity/fill-rate queries filter on
+    // this. Self-enrollment (routes/enrollments.ts) always creates 'active'
+    // rows; 'waitlisted'/'dropped' only appear in seeded fixture data today.
+    status: enrollmentStatusEnum('status').notNull().default('active'),
+    origin: originEnum('origin').notNull().default('user'),
     ...timestamps
 }, (table) => [
     // classId is already a specific workspace's row, so this pair is unique
@@ -91,6 +111,7 @@ export const enrollments = pgTable('enrollments', {
     index('enrollments_class_id_idx').on(table.classId),
     index('enrollments_created_at_idx').on(table.createdAt),
     index('enrollments_workspace_id_idx').on(table.workspaceId),
+    index('enrollments_workspace_id_origin_idx').on(table.workspaceId, table.origin),
     // Analog of the class_id+status composite the summary endpoint would want —
     // this schema has no enrollment status column, so class_id+created_at is the
     // pairing that actually serves the per-class, date-bounded counts it runs.

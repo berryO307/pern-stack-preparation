@@ -1,5 +1,6 @@
 import type { AuthProvider } from "@refinedev/core";
 import { authClient } from "@/lib/auth-client.ts";
+import { BACKEND_BASE_URL } from "@/constants";
 
 export const authProvider: AuthProvider = {
   login: async (params) => {
@@ -45,6 +46,18 @@ export const authProvider: AuthProvider = {
   },
 
   logout: async () => {
+    // Best-effort: this visitor's session is ending regardless, so a failed
+    // flush (network error, etc.) must never block sign-out - the workspace's
+    // own lazy-expiry/sweep backstops still clean it up later either way.
+    try {
+      await fetch(`${BACKEND_BASE_URL}demo/workspace/flush-visitor-data`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // Ignored - see above.
+    }
+
     await authClient.signOut();
     return { success: true, redirectTo: "/login" };
   },

@@ -1,147 +1,400 @@
-import { eq } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { departments, subjects, classes, enrollments, user } from "../db/schema/index.js";
 import { randomUUID } from "crypto";
-import { generateInviteCode } from "./inviteCode.js";
+import { faker } from "@faker-js/faker";
 
-// The same fixture content every workspace gets, so the demo is predictable and
-// reproducible rather than randomized per visitor. Teachers/students are a shared,
-// workspace-agnostic pool of fixture identities (matched by email, reused across
-// every workspace) - only departments/subjects/classes/enrollments are cloned
-// fresh per workspace, since those are the rows workspace_id actually scopes.
+// ---- Global, workspace-agnostic fixture identities -------------------------
+// Teachers/students are a shared pool reused across every workspace (matched by
+// email in upsertFixtureUsers below). The pool is built ONCE at module load with
+// a fixed seed of its own, independent of any workspace's seed - if pool names
+// changed per workspace, every re-seed would mint a fresh set of "unique" emails
+// and permanently leak orphaned user rows, since fixture users are global and
+// never swept. Per-workspace variety instead comes from which subset of this
+// fixed pool gets enrolled, in what statuses, and on what backdated schedule -
+// see generateSeedPlan. Pool size has to comfortably exceed the largest single
+// class's roster (active + waitlisted + dropped) since a class can't reuse a
+// student twice, though the same student can enroll across different classes.
+const NAME_POOL_SEED = 42;
+const STUDENT_POOL_SIZE = 140;
+const TEACHER_POOL_SIZE = 10;
 
-const FIRST_NAMES = ["Ava", "Liam", "Noah", "Emma", "Olivia", "Mia", "Ethan", "Sophia", "Lucas", "Isabella", "Mason", "Amelia", "Logan", "Harper", "Elijah", "Evelyn", "James", "Abigail", "Benjamin", "Emily", "Henry", "Ella", "Jack", "Scarlett", "Owen"];
-const LAST_NAMES = ["Carter", "Nguyen", "Patel", "Kim", "Garcia", "Rossi", "Muller", "Silva", "Johansson", "Dubois", "Khan", "Cohen", "Torres", "Ivanov", "Novak"];
+const buildNamePool = (size: number, poolSeed: number): string[] => {
+    faker.seed(poolSeed);
+    const names = new Set<string>();
+    while (names.size < size) names.add(faker.person.fullName());
+    return [...names];
+};
 
-const DEPARTMENT_DATA = [
-    { code: "CS", name: "Computer Science", description: "Software, algorithms, and systems." },
-    { code: "MATH", name: "Mathematics", description: "Pure and applied mathematics." },
-    { code: "BUS", name: "Business Administration", description: "Management, finance, and strategy." },
+const STUDENT_NAMES = buildNamePool(STUDENT_POOL_SIZE, NAME_POOL_SEED);
+const TEACHER_NAMES = buildNamePool(TEACHER_POOL_SIZE, NAME_POOL_SEED + 1);
+
+const slugify = (name: string) => name.toLowerCase().replace(/[^a-z]+/g, ".");
+// Reserved, non-routable domain - never a real institution's - so seeded
+// fixture emails can never collide with or be mistaken for a live address.
+const fixtureEmail = (name: string) => `${slugify(name)}@example.edu`;
+
+// ---- Department / subject catalog ------------------------------------------
+// Unequal sizes by design (one large, two mid, one small department, counted
+// by how many classes they end up with below) so the dashboard's department
+// breakdown isn't uniform.
+type SubjectDef = { code: string; name: string; description: string };
+type DepartmentDef = { code: string; name: string; description: string; subjects: SubjectDef[] };
+
+const DEPARTMENT_CATALOG: DepartmentDef[] = [
+    {
+        code: "CS", name: "Computer Science", description: "Software, algorithms, and systems.",
+        subjects: [
+            { code: "CS101", name: "Intro to Programming", description: "Python fundamentals: syntax, control flow, functions." },
+            { code: "CS201", name: "Data Structures", description: "Lists, trees, graphs, and complexity analysis." },
+            { code: "CS310", name: "Databases", description: "Relational modeling, SQL, and transactions." },
+            { code: "CS410", name: "Machine Learning", description: "Supervised learning, model evaluation, and applications." },
+        ],
+    },
+    {
+        code: "MATH", name: "Mathematics", description: "Pure and applied mathematics.",
+        subjects: [
+            { code: "MATH110", name: "Calculus I", description: "Limits, derivatives, and integrals." },
+            { code: "MATH220", name: "Linear Algebra", description: "Vector spaces, matrices, and eigenvalues." },
+        ],
+    },
+    {
+        code: "BUS", name: "Business Administration", description: "Management, finance, and strategy.",
+        subjects: [
+            { code: "BUS150", name: "Principles of Management", description: "Organizational theory and leadership." },
+            { code: "BUS240", name: "Financial Accounting", description: "Financial statements and reporting." },
+        ],
+    },
+    {
+        code: "ART", name: "Fine Arts", description: "Studio practice and visual culture.",
+        subjects: [
+            { code: "ART105", name: "Studio Foundations", description: "Drawing, composition, and materials." },
+        ],
+    },
 ];
 
-const SUBJECT_DATA = [
-    { code: "CS101", name: "Intro to Programming", dept: "CS", description: "Python fundamentals: syntax, control flow, functions." },
-    { code: "CS201", name: "Data Structures", dept: "CS", description: "Lists, trees, graphs, and complexity analysis." },
-    { code: "CS310", name: "Databases", dept: "CS", description: "Relational modeling, SQL, and transactions." },
-    { code: "MATH110", name: "Calculus I", dept: "MATH", description: "Limits, derivatives, and integrals." },
-    { code: "MATH220", name: "Linear Algebra", dept: "MATH", description: "Vector spaces, matrices, and eigenvalues." },
-    { code: "BUS150", name: "Principles of Management", dept: "BUS", description: "Organizational theory and leadership." },
-    { code: "BUS240", name: "Financial Accounting", dept: "BUS", description: "Financial statements and reporting." },
-];
+// ---- Section layout ----------------------------------------------------
+// Most subjects get one lecture section; the two intro CS courses and the
+// management course also get a lab/seminar, so class names aren't all
+// identically-shaped "X - Section A" rows.
+type SectionKind = { suffix: string; capacityRange: [number, number] };
+const LECTURE_A: SectionKind = { suffix: "Section A", capacityRange: [70, 120] };
+const SINGLE_SECTION: SectionKind = { suffix: "Section A", capacityRange: [45, 90] };
+const LAB: SectionKind = { suffix: "Lab", capacityRange: [20, 32] };
+const SEMINAR: SectionKind = { suffix: "Seminar", capacityRange: [20, 35] };
 
-const CLASS_DATA = [
-    { name: "Intro to Programming - Section A", subject: "CS101", capacity: 30 },
-    { name: "Data Structures - Section A", subject: "CS201", capacity: 25 },
-    { name: "Databases - Section A", subject: "CS310", capacity: 20 },
-    { name: "Calculus I - Section A", subject: "MATH110", capacity: 35 },
-    { name: "Linear Algebra - Section A", subject: "MATH220", capacity: 15 },
-    { name: "Principles of Management - Section A", subject: "BUS150", capacity: 40 },
-    { name: "Financial Accounting - Section A", subject: "BUS240", capacity: 10 },
-];
+const sectionsFor = (subjectCode: string): SectionKind[] => {
+    if (subjectCode === "CS101" || subjectCode === "CS201") return [LECTURE_A, LAB];
+    if (subjectCode === "BUS150") return [LECTURE_A, SEMINAR];
+    return [SINGLE_SECTION];
+};
 
-// Deterministic per-class fill ratios so the seeded state is identical across
-// workspaces, not random - low/medium/high/full fill levels for variety.
-const FILL_RATIOS = [0.3, 0.6, 0.85, 0.5, 1, 0.4, 0.9];
+// ---- Fill-rate targets --------------------------------------------------
+// One target ratio (active enrolled / capacity) per class, in catalog order,
+// hand-tuned rather than randomly rolled so every one of the dashboard's five
+// fill-rate buckets (0-20/21-40/41-60/61-80/81-100%, see routes/dashboard.ts's
+// capacity_bucketed CTE) is always non-empty and the overall skew matches the
+// brief (most 55-90%, a couple nearly empty, one at capacity). Length must
+// match the total class count produced by DEPARTMENT_CATALOG + sectionsFor
+// (12 today) - assertSeedPlanSanity below catches a mismatch either way.
+const FILL_TARGETS = [0.06, 0.18, 0.32, 0.48, 0.62, 0.65, 0.7, 0.74, 0.78, 0.85, 0.92, 1.0];
 
-export const seedWorkspace = async (workspaceId: string) => {
-    const teachers = await upsertTeachers();
-    const students = await upsertStudents();
+// ---- Invite codes --------------------------------------------------------
+// Seeded classes get their own in-memory generator (rather than
+// lib/inviteCode.ts's DB-backed one) so the whole plan - codes included - is
+// reproducible purely from the workspace seed, with no DB round trips before
+// the plan is validated.
+const CODE_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const CODE_DIGITS = "0123456789";
 
-    const depts: Record<string, number> = {};
-    for (const d of DEPARTMENT_DATA) {
+const planInviteCode = (used: Set<string>): string => {
+    for (let attempt = 0; attempt < 20; attempt++) {
+        const candidate =
+            Array.from({ length: 3 }, () => faker.helpers.arrayElement([...CODE_LETTERS])).join("") +
+            Array.from({ length: 3 }, () => faker.helpers.arrayElement([...CODE_DIGITS])).join("");
+        if (!used.has(candidate)) {
+            used.add(candidate);
+            return candidate;
+        }
+    }
+    throw new Error("Failed to generate a unique seeded invite code");
+};
+
+// ---- Enrollment timestamps -----------------------------------------------
+// Term-start clustering: enrollment activity clusters around January and
+// September intakes (and ramps up the month before), not spread uniformly.
+const TERM_START_MONTHS = new Set([0, 8]); // Jan, Sep
+
+type MonthWindow = { start: Date; end: Date; weight: number };
+
+const buildMonthWindows = (referenceNow: Date): MonthWindow[] => {
+    // 12 trailing windows: index 0 = current (partial) month back to index 11
+    // = 11 months ago.
+    const windows: MonthWindow[] = [];
+    for (let m = 0; m < 12; m++) {
+        const start = new Date(Date.UTC(referenceNow.getUTCFullYear(), referenceNow.getUTCMonth() - m, 1));
+        const end = m === 0 ? referenceNow : new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1) - 1);
+        const isTermStart = TERM_START_MONTHS.has(start.getUTCMonth());
+        const isPreTerm = TERM_START_MONTHS.has((start.getUTCMonth() + 1) % 12);
+        windows.push({ start, end, weight: isTermStart ? 6 : isPreTerm ? 3 : 1 });
+    }
+    return windows;
+};
+
+// Weekday-weighted: mostly Mon-Fri timestamps, with a slim allowance for
+// weekends so the distribution doesn't look artificially clipped.
+const pickWeekdayLeaningDate = (start: Date, end: Date): Date => {
+    for (let attempt = 0; attempt < 8; attempt++) {
+        const candidate = faker.date.between({ from: start, to: end });
+        const day = candidate.getUTCDay();
+        const isWeekend = day === 0 || day === 6;
+        if (!isWeekend || faker.number.float({ min: 0, max: 1 }) < 0.15) return candidate;
+    }
+    return faker.date.between({ from: start, to: end });
+};
+
+// ---- Plan generation ------------------------------------------------------
+type PlanClass = {
+    departmentCode: string;
+    subjectCode: string;
+    name: string;
+    capacity: number;
+    inviteCode: string;
+    teacherIndex: number;
+    fillTarget: number;
+};
+
+type EnrollmentStatus = "active" | "waitlisted" | "dropped";
+type PlanEnrollment = { classIndex: number; studentIndex: number; status: EnrollmentStatus; createdAt: Date };
+
+type SeedPlan = { seed: number; classesPlan: PlanClass[]; enrollmentsPlan: PlanEnrollment[] };
+
+// Mirrors routes/dashboard.ts's capacity_bucketed CTE thresholds exactly, so
+// this check means what the dashboard will actually render.
+const fillBucket = (ratio: number): string =>
+    ratio > 0.8 ? "81-100" : ratio > 0.6 ? "61-80" : ratio > 0.4 ? "41-60" : ratio > 0.2 ? "21-40" : "0-20";
+
+const assertSeedPlanSanity = (classesPlan: PlanClass[], enrollmentsPlan: PlanEnrollment[], now: Date) => {
+    const buckets = new Set(
+        classesPlan.map((cls, i) => {
+            const active = enrollmentsPlan.filter((e) => e.classIndex === i && e.status === "active").length;
+            return fillBucket(cls.capacity > 0 ? active / cls.capacity : 0);
+        })
+    );
+    if (buckets.size < 5) {
+        throw new Error(`Seed plan sanity check failed: only ${buckets.size}/5 fill-rate buckets covered`);
+    }
+
+    const monthsSeen = new Set(enrollmentsPlan.map((e) => `${e.createdAt.getUTCFullYear()}-${e.createdAt.getUTCMonth()}`));
+    if (monthsSeen.size < 12) {
+        throw new Error(`Seed plan sanity check failed: only ${monthsSeen.size}/12 trailing months have an enrollment`);
+    }
+
+    // classCount/subjectCount/teacherCount are deterministic (fixed catalog,
+    // fixed round-robin teacher assignment) - only studentCount depends on the
+    // seed, via which enrollments happen to fall in the current calendar month.
+    const subjectCount = new Set(classesPlan.map((c) => c.subjectCode)).size;
+    const classCount = classesPlan.length;
+    const teacherCount = new Set(classesPlan.map((c) => c.teacherIndex)).size;
+    const currentMonthEnrollments = enrollmentsPlan.filter(
+        (e) => e.createdAt.getUTCFullYear() === now.getUTCFullYear() && e.createdAt.getUTCMonth() === now.getUTCMonth()
+    );
+    const studentCount = new Set(currentMonthEnrollments.map((e) => e.studentIndex)).size;
+
+    const kpis = [classCount, subjectCount, studentCount, teacherCount];
+    if (new Set(kpis).size !== kpis.length) {
+        throw new Error(
+            `Seed plan sanity check failed: KPI values not distinct (classes=${classCount}, subjects=${subjectCount}, students=${studentCount}, faculty=${teacherCount})`
+        );
+    }
+};
+
+const generateSeedPlan = (seed: number): SeedPlan => {
+    faker.seed(seed);
+
+    const usedCodes = new Set<string>();
+    const classesPlan: PlanClass[] = [];
+    let fillIndex = 0;
+
+    for (const dept of DEPARTMENT_CATALOG) {
+        for (const subject of dept.subjects) {
+            for (const section of sectionsFor(subject.code)) {
+                const [min, max] = section.capacityRange;
+                const capacity = Math.round(faker.number.int({ min, max }) / 5) * 5;
+                const fillTarget = FILL_TARGETS[fillIndex++];
+                if (fillTarget === undefined) {
+                    throw new Error("FILL_TARGETS is shorter than the generated class count");
+                }
+                classesPlan.push({
+                    departmentCode: dept.code,
+                    subjectCode: subject.code,
+                    name: `${subject.name} - ${section.suffix}`,
+                    capacity,
+                    inviteCode: planInviteCode(usedCodes),
+                    teacherIndex: classesPlan.length % TEACHER_NAMES.length,
+                    fillTarget,
+                });
+            }
+        }
+    }
+
+    const now = new Date();
+    const monthWindows = buildMonthWindows(now);
+    const monthCoverage = new Set<number>();
+    const enrollmentsPlan: PlanEnrollment[] = [];
+
+    classesPlan.forEach((cls, classIndex) => {
+        const activeCount = Math.max(1, Math.round(cls.capacity * cls.fillTarget));
+        // Waitlists only make sense once a class is nearly full; a few drops
+        // happen anywhere past low attendance.
+        const waitlistedCount = cls.fillTarget >= 0.75 ? Math.max(1, Math.round(cls.capacity * 0.05)) : 0;
+        const droppedCount = cls.fillTarget >= 0.4 ? Math.round(cls.capacity * 0.03) : 0;
+
+        const rosterSize = Math.min(activeCount + waitlistedCount + droppedCount, STUDENT_NAMES.length);
+        const roster = faker.helpers.shuffle(STUDENT_NAMES.map((_, i) => i)).slice(0, rosterSize);
+
+        roster.forEach((studentIndex, i) => {
+            const status: EnrollmentStatus = i < activeCount ? "active" : i < activeCount + waitlistedCount ? "waitlisted" : "dropped";
+            const windowIndex = faker.helpers.weightedArrayElement(
+                monthWindows.map((w, idx) => ({ value: idx, weight: w.weight }))
+            );
+            const window = monthWindows[windowIndex]!;
+            const createdAt = pickWeekdayLeaningDate(window.start, window.end);
+            monthCoverage.add(windowIndex);
+            enrollmentsPlan.push({ classIndex, studentIndex, status, createdAt });
+        });
+    });
+
+    // The weighted pick above makes full 12-month coverage likely but not
+    // provable - top up any gap deterministically instead of trusting luck.
+    for (let m = 0; m < 12; m++) {
+        if (monthCoverage.has(m) || enrollmentsPlan.length === 0) continue;
+        const donor = faker.helpers.arrayElement(enrollmentsPlan);
+        const window = monthWindows[m]!;
+        donor.createdAt = pickWeekdayLeaningDate(window.start, window.end);
+        monthCoverage.add(m);
+    }
+
+    assertSeedPlanSanity(classesPlan, enrollmentsPlan, now);
+
+    return { seed, classesPlan, enrollmentsPlan };
+};
+
+// ---- Fixture user upsert ---------------------------------------------------
+async function upsertFixtureUsers(names: string[], role: "teacher" | "student"): Promise<string[]> {
+    const emails = names.map(fixtureEmail);
+
+    // One round trip to see what already exists, one bulk insert for what's
+    // missing, one final round trip to read back authoritative ids - not N
+    // round trips for N pool members, which matters now that the pool is this
+    // large (every first-time visitor's sign-in pays this cost).
+    const existing = await db.select({ id: user.id, email: user.email }).from(user).where(inArray(user.email, emails));
+    const idByEmail = new Map(existing.map((row) => [row.email, row.id]));
+
+    const missing = names
+        .map((name, i) => ({ name, email: emails[i]!, id: randomUUID() }))
+        .filter((row) => !idByEmail.has(row.email));
+
+    if (missing.length > 0) {
+        await db
+            .insert(user)
+            .values(missing.map((row) => ({ id: row.id, name: row.name, email: row.email, role, emailVerified: true })))
+            .onConflictDoNothing({ target: user.email });
+
+        // A concurrent provision may have won the race on some emails since
+        // the SELECT above - re-resolve from the DB rather than trusting the
+        // locally-generated ids for anything that actually conflicted.
+        const resolved = await db
+            .select({ id: user.id, email: user.email })
+            .from(user)
+            .where(inArray(user.email, missing.map((r) => r.email)));
+        for (const row of resolved) idByEmail.set(row.email, row.id);
+    }
+
+    return names.map((_, i) => idByEmail.get(emails[i]!)!);
+}
+
+// ---- Entry point ------------------------------------------------------
+// Builds the entire fixture dataset in memory first (deterministic from
+// `initialSeed`, validated by assertSeedPlanSanity) and only then writes it -
+// so a failed sanity check never leaves a partially-seeded workspace behind,
+// and a retry just tries a new seed rather than needing to undo DB writes.
+// Returns the seed actually used (may differ from initialSeed after a retry)
+// so the caller can persist and log the one that reproduces this exact data.
+export const seedWorkspace = async (workspaceId: string, initialSeed: number): Promise<number> => {
+    const teacherIds = await upsertFixtureUsers(TEACHER_NAMES, "teacher");
+    const studentIds = await upsertFixtureUsers(STUDENT_NAMES, "student");
+
+    const MAX_PLAN_ATTEMPTS = 5;
+    let plan: SeedPlan | undefined;
+    let seed = initialSeed;
+    for (let attempt = 0; attempt < MAX_PLAN_ATTEMPTS; attempt++) {
+        try {
+            plan = generateSeedPlan(seed);
+            break;
+        } catch (e) {
+            console.warn(`seedWorkspace: seed ${seed} failed its sanity check (${(e as Error).message}), retrying with seed ${seed + 1}`);
+            seed += 1;
+        }
+    }
+    if (!plan) throw new Error(`seedWorkspace: failed to generate a sane seed plan after ${MAX_PLAN_ATTEMPTS} attempts`);
+
+    const deptIds: Record<string, number> = {};
+    for (const dept of DEPARTMENT_CATALOG) {
         const [created] = await db
             .insert(departments)
-            .values({ workspaceId, code: d.code, name: d.name, description: d.description })
+            .values({ workspaceId, code: dept.code, name: dept.name, description: dept.description, origin: "seed" })
             .returning({ id: departments.id });
-        depts[d.code] = created!.id;
+        deptIds[dept.code] = created!.id;
     }
 
     const subjectIds: Record<string, number> = {};
-    for (const s of SUBJECT_DATA) {
-        const [created] = await db
-            .insert(subjects)
-            .values({ workspaceId, code: s.code, name: s.name, description: s.description, departmentId: depts[s.dept]! })
-            .returning({ id: subjects.id });
-        subjectIds[s.code] = created!.id;
+    for (const dept of DEPARTMENT_CATALOG) {
+        for (const subject of dept.subjects) {
+            const [created] = await db
+                .insert(subjects)
+                .values({
+                    workspaceId,
+                    code: subject.code,
+                    name: subject.name,
+                    description: subject.description,
+                    departmentId: deptIds[dept.code]!,
+                    origin: "seed",
+                })
+                .returning({ id: subjects.id });
+            subjectIds[subject.code] = created!.id;
+        }
     }
 
     const classIds: number[] = [];
-    for (let i = 0; i < CLASS_DATA.length; i++) {
-        const c = CLASS_DATA[i]!;
-        const teacherId = teachers[i % teachers.length]!;
+    for (const cls of plan.classesPlan) {
         const [created] = await db
             .insert(classes)
             .values({
                 workspaceId,
-                name: c.name,
-                subjectId: subjectIds[c.subject]!,
-                teacherId,
-                capacity: c.capacity,
-                description: `${c.name.split(" - ")[0]} for the current term.`,
-                inviteCode: await generateInviteCode(workspaceId),
+                name: cls.name,
+                subjectId: subjectIds[cls.subjectCode]!,
+                teacherId: teacherIds[cls.teacherIndex]!,
+                capacity: cls.capacity,
+                description: `${cls.name.split(" - ")[0]} for the current term.`,
+                inviteCode: cls.inviteCode,
                 schedules: [],
+                origin: "seed",
             })
             .returning({ id: classes.id });
         classIds.push(created!.id);
     }
 
-    for (let i = 0; i < classIds.length; i++) {
-        const targetCount = Math.round(CLASS_DATA[i]!.capacity * FILL_RATIOS[i]!);
-        const roster = shuffle(students).slice(0, targetCount);
-        for (const studentId of roster) {
-            const daysAgo = Math.floor(Math.random() * 30);
-            const createdAt = new Date();
-            createdAt.setDate(createdAt.getDate() - daysAgo);
-            await db.insert(enrollments).values({ workspaceId, classId: classIds[i]!, studentId, createdAt });
-        }
+    for (const e of plan.enrollmentsPlan) {
+        await db.insert(enrollments).values({
+            workspaceId,
+            classId: classIds[e.classIndex]!,
+            studentId: studentIds[e.studentIndex]!,
+            status: e.status,
+            createdAt: e.createdAt,
+            origin: "seed",
+        });
     }
+
+    return plan.seed;
 };
-
-// Global, workspace-agnostic fixture identities - matched by email and reused
-// across every workspace's seed, not recreated each time.
-async function upsertTeachers() {
-    const names = ["Priya Sharma", "Daniel Reyes", "Wei Zhang", "Fatima Al-Sayed"];
-    const ids: string[] = [];
-    for (const name of names) {
-        ids.push(await upsertFixtureUser(name, `${slugify(name)}@classroom.demo`, "teacher"));
-    }
-    return ids;
-}
-
-async function upsertStudents() {
-    const ids: string[] = [];
-    // Fixed pairing, not random - the email (used for dedup below) has to be
-    // stable across every seedWorkspace call. A random first+last pairing
-    // here would mint a brand-new "unique" email on every workspace
-    // provisioned, permanently leaking ~25 garbage user rows per workspace
-    // since fixture users are global and never swept.
-    for (let i = 0; i < FIRST_NAMES.length; i++) {
-        const name = `${FIRST_NAMES[i]} ${LAST_NAMES[i % LAST_NAMES.length]}`;
-        ids.push(await upsertFixtureUser(name, `${slugify(name)}@classroom.demo`, "student"));
-    }
-    return ids;
-}
-
-async function upsertFixtureUser(name: string, email: string, role: "teacher" | "student") {
-    const [existing] = await db.select({ id: user.id }).from(user).where(eq(user.email, email));
-    if (existing) return existing.id;
-
-    const id = randomUUID();
-    await db.insert(user).values({ id, name, email, role, emailVerified: true });
-    return id;
-}
-
-function slugify(name: string) {
-    return name.toLowerCase().replace(/[^a-z]+/g, ".");
-}
-
-function shuffle<T>(arr: T[]): T[] {
-    const copy = [...arr];
-    for (let i = copy.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        const temp = copy[i]!;
-        copy[i] = copy[j]!;
-        copy[j] = temp;
-    }
-    return copy;
-}

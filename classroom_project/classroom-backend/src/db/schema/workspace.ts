@@ -1,4 +1,4 @@
-import { boolean, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { user } from "./auth.js";
 
@@ -12,6 +12,11 @@ export const demoWorkspaces = pgTable('demo_workspaces', {
     createdAt: timestamp('created_at').defaultNow().notNull(),
     expiresAt: timestamp('expires_at').notNull(),
     seededAt: timestamp('seeded_at'),
+    // Passed to faker.seed() when generating this workspace's fixture data -
+    // logged at provision time so any data-shaped bug can be replayed exactly
+    // by re-seeding with the same value, even though the data itself looks
+    // randomized to a visitor.
+    seedValue: integer('seed_value'),
 }, (table) => [
     // A user has at most one workspace row at a time - an expired one is deleted
     // (not flagged) before/when a new one is provisioned, so a plain unique

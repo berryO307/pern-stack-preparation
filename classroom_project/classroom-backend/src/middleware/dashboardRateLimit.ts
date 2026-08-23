@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import type { ArcjetNodeRequest } from "@arcjet/node";
 import { tokenBucket } from "@arcjet/node";
-import aj from "../config/arcjet.js";
+import aj, { ARCJET_MODE } from "../config/arcjet.js";
 
 // Dashboard-summary-specific limit, keyed on the authenticated user (falling
 // back to IP for the rare unauthenticated case) rather than the blanket
@@ -11,7 +11,7 @@ import aj from "../config/arcjet.js";
 // sustained with room for a 10-request burst.
 const dashboardSummaryClient = aj.withRule(
     tokenBucket({
-        mode: "LIVE",
+        mode: ARCJET_MODE,
         characteristics: ["userId"],
         capacity: 10,
         refillRate: 10,

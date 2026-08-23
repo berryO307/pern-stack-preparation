@@ -78,7 +78,7 @@ const runSummaryQuery = async (tz: string, departmentId: number | null, workspac
             WHERE workspace_id = ${workspaceId}
         ),
         class_ratios AS (
-            SELECT c.id, c.capacity, count(e.id) AS enrolled
+            SELECT c.id, c.capacity, count(e.id) FILTER (WHERE e.status = 'active') AS enrolled
             FROM classes c
             LEFT JOIN enrollments e ON e.class_id = c.id
             WHERE c.workspace_id = ${workspaceId}
@@ -145,6 +145,7 @@ const runSummaryQuery = async (tz: string, departmentId: number | null, workspac
                 FROM enrollments e
                 WHERE e.class_id = c.id
                     AND e.workspace_id = ${workspaceId}
+                    AND e.status = 'active'
                     AND (e.created_at AT TIME ZONE 'UTC' AT TIME ZONE ${tz}) < (m.month_start + interval '1 month')
             ) cnt ON true
             GROUP BY m.month_start

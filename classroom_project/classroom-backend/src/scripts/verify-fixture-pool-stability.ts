@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { randomUUID } from "crypto";
+import { randomInt, randomUUID } from "crypto";
 import { eq, like, sql } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { user, demoWorkspaces } from "../db/schema/index.js";
@@ -19,7 +19,7 @@ async function fixtureCount() {
     const [row] = await db
         .select({ count: sql<number>`count(*)` })
         .from(user)
-        .where(like(user.email, "%@classroom.demo"));
+        .where(like(user.email, "%@example.edu"));
     return Number(row?.count ?? 0);
 }
 
@@ -42,7 +42,7 @@ async function main() {
             .values({ userId: id, isPermanent: false, expiresAt: new Date(Date.now() + 60 * 60 * 1000) })
             .returning();
 
-        await seedWorkspace(workspace!.id);
+        await seedWorkspace(workspace!.id, randomInt(0, 2 ** 31 - 1));
 
         const count = await fixtureCount();
         countsAfterEach.push(count);

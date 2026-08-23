@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import type { ArcjetNodeRequest } from "@arcjet/node";
 import { tokenBucket } from "@arcjet/node";
-import aj from "../config/arcjet.js";
+import aj, { ARCJET_MODE } from "../config/arcjet.js";
 
 // POST /api/demo/workspace is normally called once per sign-in; the lazy
 // path in middleware/workspace.ts otherwise just reuses an existing
@@ -10,7 +10,7 @@ import aj from "../config/arcjet.js";
 // generous headroom for legitimate multi-tab/reconnect calls.
 const provisionClient = aj.withRule(
     tokenBucket({
-        mode: "LIVE",
+        mode: ARCJET_MODE,
         characteristics: ["userId"],
         capacity: 3,
         refillRate: 3,
