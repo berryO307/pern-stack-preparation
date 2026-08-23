@@ -112,6 +112,7 @@ export function DataTable<TData extends BaseRecord>({
                     <TableHead
                       key={header.id}
                       scope="col"
+                      className={header.column.columnDef.meta?.className}
                       style={{
                         ...getCommonStyles({
                           column: header.column,
@@ -150,7 +151,7 @@ export function DataTable<TData extends BaseRecord>({
                             isOverflowing: isOverflowing,
                           }),
                         }}
-                        className={cn("truncate")}
+                        className={cn("truncate", column.columnDef.meta?.className)}
                       >
                         <Skeleton className="h-4 w-3/4" />
                       </TableCell>
@@ -173,6 +174,7 @@ export function DataTable<TData extends BaseRecord>({
                       return (
                         <TableCell
                           key={cell.id}
+                          className={cell.column.columnDef.meta?.className}
                           style={{
                             ...getCommonStyles({
                               column: cell.column,
@@ -336,7 +338,10 @@ export function getCommonStyles<TData>({
       isOverflowing.horizontal && isPinned === "left"
         ? "var(--radius)"
         : undefined,
-    width: column.getSize(),
+    width:
+      column.columnDef.meta?.flex || column.columnDef.meta?.className
+        ? undefined
+        : column.getSize(),
     zIndex: isOverflowing.horizontal && isPinned ? 1 : 0,
   };
 }

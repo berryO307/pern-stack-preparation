@@ -75,7 +75,7 @@ router.post('/', domainWriteRateLimit, enforceRowQuota(classes, classes.workspac
 // Get all classes with optional search, filtering and pagination
 router.get("/", async (req, res) => {
     try {
-        const { search, subject, teacher, status, page = 1, limit = 10, sortField, sortOrder } = req.query;
+        const { search, subject, subjectId, teacher, status, page = 1, limit = 10, sortField, sortOrder } = req.query;
 
         const currentPage = Math.max(1, parseInt(String(page), 10) || 1);
         const limitPerPage = Math.min(Math.max(1, parseInt(String(limit), 10) || 10), 100);
@@ -102,6 +102,16 @@ router.get("/", async (req, res) => {
         if (subject) {
             const subjectPattern = `%${String(subject).replace(/[%_]/g, '\\$&')}%`;
             filterConditions.push(ilike(subjects.name, subjectPattern));
+        }
+        // If subjectId filter exists, match the subject exactly - used by the
+        // subject detail page to list its own sections without relying on a
+        // fuzzy name match.
+        if (subjectId) {
+            const parsedSubjectId = Number(subjectId);
+            if (!Number.isFinite(parsedSubjectId)) {
+                return res.status(400).json({ error: "Invalid subjectId filter" });
+            }
+            filterConditions.push(eq(classes.subjectId, parsedSubjectId));
         }
         // If teacher filter exists, match teacher name
         if (teacher) {

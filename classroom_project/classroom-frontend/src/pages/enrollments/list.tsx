@@ -126,7 +126,9 @@ const EnrollmentsList = () => {
       <h1 className="page-title">Enrollments</h1>
 
       <div className="intro-row">
-        <p>Every student-to-class enrollment across the institution.</p>
+        <p className="text-sm text-muted-foreground">
+          Every student-to-class enrollment across the institution.
+        </p>
 
         <div className="actions-row">
           <div className="search-field">
