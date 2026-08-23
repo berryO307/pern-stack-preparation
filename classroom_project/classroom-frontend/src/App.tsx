@@ -20,6 +20,7 @@ import Dashboard from "@/pages/dashboard.tsx";
 import { Building2, BookOpen, ClipboardList, GraduationCap, House, Users } from "lucide-react";
 import SubjectsList from "@/pages/subjects/list.tsx";
 import SubjectsCreate from "@/pages/subjects/create.tsx";
+import SubjectsShow from "@/pages/subjects/show.tsx";
 import ClassesList from "@/pages/classes/list.tsx";
 import ClassesCreate from "@/pages/classes/create.tsx";
 import ClassesShow from "@/pages/classes/show.tsx";
@@ -70,6 +71,7 @@ function App() {
                 name: "subjects",
                 list: "/subjects",
                 create: "/subjects/create",
+                show: "/subjects/show/:id",
                 meta: { label: "Subjects", icon: <BookOpen /> },
               },
               {
@@ -126,6 +128,7 @@ function App() {
                 <Route path="subjects">
                   <Route index element={<SubjectsList />} />
                   <Route path="create" element={<SubjectsCreate />} />
+                  <Route path="show/:id" element={<SubjectsShow />} />
                 </Route>
                 <Route path="faculty">
                   <Route index element={<FacultyList />} />
