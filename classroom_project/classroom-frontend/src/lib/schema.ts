@@ -40,6 +40,8 @@ export const subjectSchema = z.object({
       invalid_type_error: "Department is required",
     })
     .min(1, "Department is required"),
+  imageUrl: z.string().optional().nullable(),
+  imageCldPubId: z.string().optional().nullable(),
 });
 
 const scheduleSchema = z.object({

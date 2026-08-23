@@ -35,6 +35,12 @@ export const bannerPhoto = (imageCldPubId: string, name: string) => {
 export const buildCloudinaryAvatarUrl = (publicId: string, size = 80): string =>
   `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/f_auto,q_auto,c_fill,g_face,w_${size},h_${size},dpr_auto/${publicId}`;
 
+// Same circular-thumbnail delivery as the avatar helper above, minus
+// g_face - a class banner isn't a portrait, so face-detection cropping has
+// nothing to find and would just crop arbitrarily.
+export const buildClassBannerThumbUrl = (publicId: string, size = 80): string =>
+  `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload/f_auto,q_auto,c_fill,w_${size},h_${size},dpr_auto/${publicId}`;
+
 // A real uploaded photo (imageCldPubId, via the upload widget) always wins
 // over a seeded placeholder (image - a DiceBear URL for fixture people, see
 // lib/seedWorkspace.ts on the backend) - once someone uploads their own

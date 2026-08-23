@@ -4,6 +4,7 @@ export type Subject = {
   code: string;
   description: string;
   department: Department | null;
+  imageCldPubId?: string | null;
   createdAt?: string;
 };
 

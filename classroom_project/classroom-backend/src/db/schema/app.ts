@@ -51,6 +51,7 @@ export const subjects = pgTable('subjects', {
     name: varchar('name', {length:255}).notNull(),
     code: varchar('code', {length: 50}).notNull(),
     description: varchar('description', {length: 255}),
+    imageCldPubId: text('image_cld_pub_id'),
     origin: originEnum('origin').notNull().default('user'),
     ...timestamps
 }, (table) => [

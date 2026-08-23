@@ -64,6 +64,13 @@
       "when": 1787395729848,
       "tag": "0009_add_origin_column",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787505760475,
+      "tag": "0009_skinny_moondragon",
+      "breakpoints": true
     }
   ]
 }
