@@ -13,6 +13,8 @@ import { CreateButton } from "@/components/refine-ui/buttons/create.tsx";
 import { Enrollment } from "@/types";
 import { useDebouncedValue } from "@/hooks/use-debounced-value.ts";
 import { getFilterValue } from "@/lib/filters.ts";
+import { PersonCell } from "@/components/person-cell.tsx";
+import { buildAvatarSrc } from "@/lib/cloudinary.ts";
 
 const EnrollmentsList = () => {
   const EnrollmentsTable = useTable<Enrollment>({
@@ -20,16 +22,23 @@ const EnrollmentsList = () => {
       () => [
         {
           id: "student",
-          size: 220,
+          size: 240,
           header: () => <p className="column-title ml-2">Student</p>,
-          cell: ({ row }) => (
-            <div className="min-w-0 ml-2">
-              <p className="truncate text-foreground">{row.original.student?.name}</p>
-              <p className="truncate text-xs text-muted-foreground">
-                {row.original.student?.email}
-              </p>
-            </div>
-          ),
+          cell: ({ row }) => {
+            const student = row.original.student;
+            if (!student) return <span className="ml-2 text-muted-foreground">—</span>;
+            return (
+              <div className="min-w-0 ml-2">
+                <PersonCell
+                  name={student.name}
+                  avatarSrc={buildAvatarSrc(student.imageCldPubId, student.image)}
+                />
+                <p className="truncate text-xs text-muted-foreground mt-0.5 ml-10">
+                  {student.email}
+                </p>
+              </div>
+            );
+          },
         },
         {
           id: "class",
@@ -125,23 +134,23 @@ const EnrollmentsList = () => {
 
       <h1 className="page-title">Enrollments</h1>
 
-      <div className="intro-row">
-        <p className="text-sm text-muted-foreground">
-          Every student-to-class enrollment across the institution.
-        </p>
+      <p className="text-sm text-muted-foreground">
+        Every student-to-class enrollment across the institution.
+      </p>
 
-        <div className="actions-row">
-          <div className="search-field">
-            <Search className="search-icon" />
-            <Input
-              type="text"
-              placeholder="Search by student or class..."
-              className="pl-10 w-full"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="search-field sm:w-1/3">
+          <Search className="search-icon" />
+          <Input
+            type="text"
+            placeholder="Search by student or class..."
+            className="pl-10 w-full"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
 
+        <div className="flex gap-2 w-full sm:w-auto">
           <CreateButton resource="enrollments">
             <div className="flex items-center gap-2 font-semibold">
               <UserPlus className="w-4 h-4" />

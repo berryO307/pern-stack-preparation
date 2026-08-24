@@ -1,9 +1,10 @@
 import { ListView } from "@/components/refine-ui/views/list-view.tsx";
 import { Breadcrumb } from "@/components/refine-ui/layout/breadcrumb.tsx";
-import { Search, X, SlidersHorizontal, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Search, X, SlidersHorizontal, MoreVertical, Pencil, Trash2, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useState, useMemo, useEffect, useRef } from "react";
+import { useLocation } from "react-router";
 import { useTable } from "@refinedev/react-table";
 import { type ColumnDef } from "@tanstack/react-table";
 import { useDelete, useLink, useNavigation } from "@refinedev/core";
@@ -135,6 +136,8 @@ type UsersListProps = {
   defaultRole?: string;
   /** Noun for empty-state copy, e.g. "faculty members". */
   emptyStateNoun?: string;
+  /** Resource a row's name/avatar links to - "faculty" from the Faculty view so it lands on the Faculty-scoped profile page, not the generic Users one. */
+  showResource?: string;
 };
 
 const UsersList = ({
@@ -142,14 +145,49 @@ const UsersList = ({
   subtitle = "Manage every account across the institution",
   defaultRole = "all",
   emptyStateNoun = "users",
+  showResource = "users",
 }: UsersListProps = {}) => {
   const { isAdmin } = useIsAdmin();
   const { showUrl } = useNavigation();
   const Link = useLink();
+  const location = useLocation();
   // Every row on the Faculty view is already role=teacher, so a Role column
   // there is dead weight (see brief C4) - Department (derived server-side
   // from what they teach) actually varies and carries information.
   const showDepartmentColumn = defaultRole === "teacher";
+
+  // Faculty's "teacher" scope and the Total students KPI card's "student"
+  // preset both need to reach the very first fetch. Carrying either through
+  // useTable's `filters` (whether via `filters.initial` or a `setFilters`
+  // call, no matter how it's timed) hits a confirmed upstream bug: Refine's
+  // own useTable has an internal effect that resets `filters` back to
+  // defaults whenever the parsed URL has no query string, and it keeps
+  // re-firing well into the mount sequence, silently reverting any filter
+  // pushed through the normal channel (reproduced live via a debug trace -
+  // waiting for the initial fetch to settle before pushing didn't dodge it
+  // either). `meta` is a separate parameter the data provider reads
+  // directly and Refine never touches for this reset - baselineRole travels
+  // that way instead, so the base scope for this page is immune to the bug.
+  // The Filters popover's own role choice still goes through `filters`
+  // normally when it actively differs from this baseline (see the push
+  // effect below), which remains a safe, already-proven path since it fires
+  // from real user interaction well after mount, not close to it.
+  // Captured once, not read fresh every render: `syncWithLocation` makes
+  // Refine call history.replace() on its own (to reflect pagination/sorter
+  // changes in the URL), and that replace doesn't carry the router `state`
+  // this came in on - `location.state` goes back to `null` the moment that
+  // first happens, which silently dropped the preset a render or two after
+  // landing here (confirmed live: the KPI card's role scope applied to the
+  // rows shown but then vanished from the page-count math).
+  const presetRoleRef = useRef(
+    (location.state as { presetRole?: string } | null)?.presetRole,
+  );
+  const presetRole = presetRoleRef.current;
+  const baselineRole = defaultRole !== "all" ? defaultRole : presetRole;
+  const baselineMeta = useMemo(
+    () => (baselineRole ? { defaultRole: baselineRole } : undefined),
+    [baselineRole],
+  );
 
   const UsersTable = useTable<User>({
     columns: useMemo<ColumnDef<User>[]>(
@@ -163,7 +201,7 @@ const UsersList = ({
             const name = getValue<string>();
             const avatarSrc = buildAvatarSrc(row.original.imageCldPubId, row.original.image);
             return (
-              <Link to={showUrl("users", row.original.id)} className="ml-2 inline-block">
+              <Link to={showUrl(showResource, row.original.id)} className="ml-2 inline-block">
                 <PersonCell name={name} avatarSrc={avatarSrc} />
               </Link>
             );
@@ -226,22 +264,19 @@ const UsersList = ({
             ) : null,
         },
       ],
-      [isAdmin, showDepartmentColumn],
+      [isAdmin, showDepartmentColumn, showResource, showUrl],
     ),
     refineCoreProps: {
       resource: "users",
       pagination: { pageSize: 10, mode: "server" },
       filters: {
         defaultBehavior: "replace",
-        initial:
-          defaultRole !== "all"
-            ? [{ field: "role", operator: "eq", value: defaultRole }]
-            : [],
       },
       sorters: {
         initial: [{ field: "createdAt", order: "desc" }],
       },
       syncWithLocation: true,
+      meta: baselineMeta,
     },
     // Below md the table scrolls horizontally inside its card rather than
     // collapsing into stacked cards - reuses DataTable's existing pinned-
@@ -257,18 +292,19 @@ const UsersList = ({
 
   const [searchQuery, setSearchQuery] = useState(() => getFilterValue(filters, "name"));
   const [selectedRole, setSelectedRole] = useState(
-    () => getFilterValue(filters, "role") || defaultRole,
+    () => getFilterValue(filters, "role") || baselineRole || "all",
   );
   const [filtersPopoverOpen, setFiltersPopoverOpen] = useState(false);
 
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
-  // A role-locked view like Faculty always has selectedRole === defaultRole
-  // ("teacher") just by existing - that's the page's own built-in scope, not
-  // something the visitor chose, so it shouldn't count as an active filter
-  // (it was inflating the Filters badge to "1" on first load, and would have
-  // made the empty state claim "filters are hiding results" when the table
-  // was genuinely empty).
-  const isRoleFilterActive = selectedRole !== "all" && selectedRole !== defaultRole;
+  // A role-locked view like Faculty (or /users landed on from the Total
+  // students KPI card) always has selectedRole === baselineRole just by
+  // existing - that's the page's own built-in scope, not something the
+  // visitor chose, so it shouldn't count as an active filter (it was
+  // inflating the Filters badge to "1" on first load, and would have made
+  // the empty state claim "filters are hiding results" when the table was
+  // genuinely empty).
+  const isRoleFilterActive = selectedRole !== "all" && selectedRole !== (baselineRole ?? "all");
   const activeFilterCount = isRoleFilterActive ? 1 : 0;
   const hasActiveFilters = Boolean(searchQuery) || isRoleFilterActive;
 
@@ -283,6 +319,14 @@ const UsersList = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableQuery.dataUpdatedAt]);
 
+  // `searchQuery`/`selectedRole` are the single source of truth for these
+  // controls, pushed one-way into `filters` below (no reactive "sync back
+  // from filters" effect - see baselineMeta above for why that direction is
+  // unsafe here). The page's own baseline role scope travels via `meta`,
+  // not `filters`, so this effect only ever needs to push a `role` filter
+  // when the visitor's own choice actively differs from that baseline -
+  // exactly the same "only touch filters from a real, later interaction"
+  // shape already proven safe on Subjects/Departments.
   const isFirstRender = useRef(true);
   useEffect(() => {
     if (isFirstRender.current) {
@@ -293,7 +337,7 @@ const UsersList = ({
     if (debouncedSearch) {
       nextFilters.push({ field: "name", operator: "contains" as const, value: debouncedSearch });
     }
-    if (selectedRole !== "all") {
+    if (selectedRole !== "all" && selectedRole !== (baselineRole ?? "all")) {
       nextFilters.push({ field: "role", operator: "eq" as const, value: selectedRole });
     }
     setFilters(nextFilters, "replace");
@@ -301,19 +345,10 @@ const UsersList = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, selectedRole]);
 
-  // Keeps the search/role controls in sync when `filters` changes from
-  // outside this component's own debounced push above — browser back/forward
-  // navigation, or an external link (e.g. a dashboard KPI card) landing on
-  // this page with a filter already set.
-  useEffect(() => {
-    setSearchQuery(getFilterValue(filters, "name"));
-    setSelectedRole(getFilterValue(filters, "role") || "all");
-  }, [filters]);
-
   const clearAllFilters = () => {
     // Back to the page's own baseline scope, not an unscoped view - on
     // Faculty that's "teacher", not "all roles".
-    setSelectedRole(defaultRole);
+    setSelectedRole(baselineRole ?? "all");
     setFiltersPopoverOpen(false);
   };
 
@@ -322,17 +357,14 @@ const UsersList = ({
   // resets search, not just Role.
   const clearAllActiveFilters = () => {
     setSearchQuery("");
-    setSelectedRole(defaultRole);
+    setSelectedRole(baselineRole ?? "all");
   };
 
   return (
     <ListView>
       <Breadcrumb />
 
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="page-title">{title}</h1>
-        {isAdmin && <CreateButton resource="users" variant="default" />}
-      </div>
+      <h1 className="page-title">{title}</h1>
       <p className="text-sm text-muted-foreground">{subtitle}</p>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -400,6 +432,15 @@ const UsersList = ({
               </div>
             </PopoverContent>
           </Popover>
+
+          {isAdmin && (
+            <CreateButton resource="users">
+              <div className="flex items-center gap-2 font-semibold">
+                <Plus className="w-4 h-4" />
+                <span>Add</span>
+              </div>
+            </CreateButton>
+          )}
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 import { ListView } from "@/components/refine-ui/views/list-view.tsx";
 import { Breadcrumb } from "@/components/refine-ui/layout/breadcrumb.tsx";
-import { SlidersHorizontal, Search } from "lucide-react";
+import { SlidersHorizontal, Search, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useState, useMemo, useEffect, useRef } from "react";
@@ -222,7 +222,12 @@ const DepartmentsList = () => {
             </PopoverContent>
           </Popover>
 
-          <CreateButton resource="departments" />
+          <CreateButton resource="departments">
+            <div className="flex items-center gap-2 font-semibold">
+              <Plus className="w-4 h-4" />
+              <span>Add</span>
+            </div>
+          </CreateButton>
         </div>
       </div>
 

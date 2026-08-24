@@ -10,11 +10,20 @@ const options: CreateDataProviderOptions = {
   getList: {
     getEndpoint: ({ resource }) => resource,
 
-    buildQueryParams: async ({ resource, pagination, filters, sorters }) => {
+    buildQueryParams: async ({ resource, pagination, filters, sorters, meta }) => {
       const page = pagination?.currentPage ?? 1;
       const pageSize = pagination?.pageSize ?? 10;
 
       const params: Record<string, string | number> = { page, limit: pageSize };
+
+      // A page-level scope (Faculty's "teacher", the Total students KPI
+      // card's "student") travels via `meta` rather than `filters` - see
+      // pages/users/list.tsx's `baselineMeta` for why. Set first so an
+      // explicit `role` filter below (a visitor's own Filters-popover
+      // choice) still overrides it.
+      if (resource === "users" && typeof meta?.defaultRole === "string") {
+        params.role = meta.defaultRole;
+      }
 
       if (
         (resource === "classes" ||
@@ -48,6 +57,8 @@ const options: CreateDataProviderOptions = {
           if (field === "name") params.search = value;
           if (field === "subject") params.subject = value;
           if (field === "subjectId") params.subjectId = value;
+          if (field === "departmentId") params.departmentId = value;
+          if (field === "capacityBucket") params.capacityBucket = value;
           if (field === "teacher") params.teacher = value;
           if (field === "status") params.status = value;
         }
@@ -61,6 +72,7 @@ const options: CreateDataProviderOptions = {
           if (field === "classId") params.classId = value;
           if (field === "studentId") params.studentId = value;
           if (field === "search") params.search = value;
+          if (field === "status") params.status = value;
         }
       });
 
