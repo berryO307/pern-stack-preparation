@@ -16,7 +16,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.tsx";
 import { useSidebar } from "@/components/ui/sidebar.tsx";
 import { endRumSession } from "@/lib/rum.ts";
-import { cn, getInitials } from "@/lib/utils.ts";
+import { cn, getInitials, displayName as getDisplayName } from "@/lib/utils.ts";
 
 type Identity = {
   id: string;
@@ -47,7 +47,7 @@ export function SidebarUserMenu() {
     );
   }
 
-  const displayName = identity.fullName || identity.name;
+  const displayName = getDisplayName({ name: identity.fullName || identity.name, email: identity.email });
 
   const handleSignOut = () => {
     endRumSession();

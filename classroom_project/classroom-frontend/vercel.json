@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "https://ums-pern-stack.up.railway.app/api/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
