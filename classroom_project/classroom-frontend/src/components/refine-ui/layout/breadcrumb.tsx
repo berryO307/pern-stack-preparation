@@ -16,7 +16,18 @@ import {
   Breadcrumb as ShadcnBreadcrumb,
 } from "@/components/ui/breadcrumb";
 
-export function Breadcrumb() {
+type BreadcrumbProps = {
+  /**
+   * Replaces the final crumb's label - Refine derives it from the current
+   * action's internal name (e.g. "Show"), which leaks implementation detail
+   * a reader shouldn't need to know. Only the last crumb is ever
+   * overridden; it's never a link anyway (ShadcnBreadcrumbPage), so
+   * swapping its text doesn't change its behaviour.
+   */
+  overrideLastLabel?: string;
+};
+
+export function Breadcrumb({ overrideLastLabel }: BreadcrumbProps = {}) {
   const Link = useLink();
   const { breadcrumbs } = useBreadcrumb();
   const { resources } = useResourceParams();
@@ -49,8 +60,13 @@ export function Breadcrumb() {
       });
     }
 
+    if (overrideLastLabel && list.length > 0) {
+      const last = list[list.length - 1]!;
+      list[list.length - 1] = { ...last, Component: <span>{overrideLastLabel}</span> };
+    }
+
     return list;
-  }, [breadcrumbs, Link, rootRouteResource]);
+  }, [breadcrumbs, Link, rootRouteResource, overrideLastLabel]);
 
   return (
     <ShadcnBreadcrumb>

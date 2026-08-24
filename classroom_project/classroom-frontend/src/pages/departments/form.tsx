@@ -123,21 +123,11 @@ const DepartmentForm = ({ action }: DepartmentFormProps) => {
 
               <Separator />
 
-              <div className="flex gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="flex-1"
-                  onClick={() => back()}
-                  disabled={formLoading}
-                >
-                  Back
-                </Button>
+              <div className="flex flex-col gap-2">
                 <Button
                   type="submit"
                   size="lg"
-                  className="flex-1"
+                  className="w-full"
                   disabled={formLoading || isLoadingRecord}
                 >
                   {formLoading ? (
@@ -154,6 +144,16 @@ const DepartmentForm = ({ action }: DepartmentFormProps) => {
                   ) : (
                     "Save Changes"
                   )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full"
+                  onClick={() => back()}
+                  disabled={formLoading}
+                >
+                  Back
                 </Button>
               </div>
             </form>

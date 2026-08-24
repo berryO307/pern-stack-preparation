@@ -1,7 +1,8 @@
 import express from "express";
 import { db } from "../db/index.js";
 import { classes, enrollments, subjects, user } from "../db/schema/index.js";
-import { and, asc, desc, eq, getTableColumns, ilike, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, ilike, inArray, or, sql } from "drizzle-orm";
+import { enrollmentStatusEnum } from "../db/schema/index.js";
 import { requireAuth } from "../middleware/authorize.js";
 import workspaceMiddleware from "../middleware/workspace.js";
 import { enforceRowQuota, enforceVisitorEnrollmentQuota } from "../middleware/rowQuota.js";
@@ -26,7 +27,7 @@ router.use(requireAuth, workspaceMiddleware);
 // views); omitting both returns the full, paginated list for the Enrollments page.
 router.get("/", async (req, res) => {
     try {
-        const { classId, studentId, search, page = 1, limit = 10, sortField, sortOrder } = req.query;
+        const { classId, studentId, status, search, page = 1, limit = 10, sortField, sortOrder } = req.query;
 
         const currentPage = Math.max(1, parseInt(String(page), 10) || 1);
         const limitPerPage = Math.min(Math.max(1, parseInt(String(limit), 10) || 10), 100);
@@ -44,6 +45,19 @@ router.get("/", async (req, res) => {
         const filterConditions = [eq(enrollments.workspaceId, req.workspaceId!)];
         if (classId) filterConditions.push(eq(enrollments.classId, Number(classId)));
         if (studentId) filterConditions.push(eq(enrollments.studentId, String(studentId)));
+        // Comma-separated (?status=active,waitlisted) so the class detail
+        // page's "currently enrolled" roster (status=active only) and any
+        // future multi-value filter share the same param shape.
+        if (status) {
+            const requested = String(status).split(",").map((s) => s.trim());
+            const validStatuses = requested.filter((s): s is typeof enrollmentStatusEnum.enumValues[number] =>
+                (enrollmentStatusEnum.enumValues as readonly string[]).includes(s)
+            );
+            if (validStatuses.length === 0) {
+                return res.status(400).json({ error: "Invalid status filter" });
+            }
+            filterConditions.push(inArray(enrollments.status, validStatuses));
+        }
         if (search) {
             filterConditions.push(
                 or(
@@ -136,7 +150,7 @@ router.post(
             // 2. A class with that code exists in the caller's own workspace -
             // never leak whether a code is valid in some OTHER workspace.
             const [codeClass] = await db
-                .select({ id: classes.id })
+                .select({ id: classes.id, status: classes.status })
                 .from(classes)
                 .where(and(eq(classes.workspaceId, req.workspaceId!), eq(classes.inviteCode, inviteCode)));
 
@@ -157,6 +171,16 @@ router.post(
                     return res.status(429).json({ error: "Too many code attempts - please wait a bit before trying again." });
                 }
                 return res.status(422).json({ errors: { inviteCode: "That code belongs to a different class." } });
+            }
+
+            // 4. Status gate - mirrors the Join Class button's own precedence
+            // (archived/inactive block before capacity does), enforced here
+            // too so a direct API call can't bypass a disabled button.
+            if (codeClass.status === "archived") {
+                return res.status(422).json({ errors: { classId: "This class is archived." } });
+            }
+            if (codeClass.status === "inactive") {
+                return res.status(422).json({ errors: { classId: "Enrollment is closed for this class." } });
             }
 
             // Resolve the email to an existing user - self-enrollment doesn't
@@ -216,6 +240,20 @@ router.delete("/:id", domainWriteRateLimit, async (req, res) => {
     try {
         const enrollmentId = Number(req.params.id);
         if (!Number.isFinite(enrollmentId)) return res.status(404).json({ error: "No enrollment found" });
+
+        // An archived class is a historical record - its roster is read-only,
+        // not just in the UI (which disables the button) but here too, since
+        // a UI-only guard on a historical record isn't a guard.
+        const [target] = await db
+            .select({ classStatus: classes.status })
+            .from(enrollments)
+            .leftJoin(classes, eq(enrollments.classId, classes.id))
+            .where(and(eq(enrollments.id, enrollmentId), eq(enrollments.workspaceId, req.workspaceId!)));
+
+        if (!target) return res.status(404).json({ error: "No enrollment found" });
+        if (target.classStatus === "archived") {
+            return res.status(409).json({ error: "This class is archived - its roster can't be changed." });
+        }
 
         const [deletedEnrollment] = await db
             .delete(enrollments)

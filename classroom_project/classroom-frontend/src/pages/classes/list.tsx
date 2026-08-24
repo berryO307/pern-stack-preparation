@@ -34,64 +34,23 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover.tsx";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar.tsx";
+import { Checkbox } from "@/components/ui/checkbox.tsx";
 import { CreateButton } from "@/components/refine-ui/buttons/create.tsx";
 import { DataTable } from "@/components/refine-ui/data-table/data-table.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { PersonCell } from "@/components/person-cell.tsx";
+import { ClassStatusBadge } from "@/components/class-status-badge.tsx";
 import type { Class, Subject, User } from "@/types";
 import { useDebouncedValue } from "@/hooks/use-debounced-value.ts";
 import { getFilterValue } from "@/lib/filters.ts";
-import { cn } from "@/lib/utils.ts";
+import { CLASS_STATUS_OPTIONS, type ClassStatus } from "@/lib/class-status.ts";
+import {
+  SUBJECT_TINT_AVATAR_CLASSES,
+  SUBJECT_TINT_BADGE_CLASSES,
+  hashToTintIndex,
+} from "@/lib/subject-tint.ts";
 import { buildAvatarSrc, buildClassBannerThumbUrl } from "@/lib/cloudinary.ts";
 import { trackRumEvent } from "@/lib/rum.ts";
-
-const STATUS_OPTIONS = [
-  { value: "active", label: "Active" },
-  { value: "inactive", label: "Inactive" },
-  { value: "archived", label: "Archived" },
-];
-
-const STATUS_LABELS: Record<string, string> = {
-  active: "Active",
-  inactive: "Inactive",
-  archived: "Archived",
-};
-
-// Decorative, not semantic - a subject's tint is only ever a stable visual
-// grouping cue (same subject = same colour across pages and reloads), never
-// a signal in its own right. The theme's --chart-1..5 tokens are all one
-// hue at different lightness steps (this theme's chart palette is
-// monochrome blue), which read as "everything is purple" - Tailwind's own
-// palette gives real hue variety instead, same approach as DepartmentBadge.
-// Full literal class strings (not template-interpolated) because Tailwind's
-// scanner only picks up complete strings it can find in source.
-const SUBJECT_TINT_BADGE_CLASSES = [
-  "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-transparent",
-  "bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-transparent",
-  "bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 border-transparent",
-  "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-transparent",
-  "bg-pink-50 dark:bg-pink-950/40 text-pink-700 dark:text-pink-300 border-transparent",
-  "bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-transparent",
-  "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-transparent",
-  "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-transparent",
-];
-const SUBJECT_TINT_AVATAR_CLASSES = [
-  "bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300",
-  "bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300",
-  "bg-green-100 dark:bg-green-950/60 text-green-700 dark:text-green-300",
-  "bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300",
-  "bg-pink-100 dark:bg-pink-950/60 text-pink-700 dark:text-pink-300",
-  "bg-teal-100 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300",
-  "bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300",
-  "bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300",
-];
-
-const hashToTintIndex = (seed: number | string): number => {
-  const str = String(seed);
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
-  return hash % SUBJECT_TINT_BADGE_CLASSES.length;
-};
 
 // A department-level icon for the banner fallback, so an unset banner reads
 // as "this class is a Physics class" at a glance instead of just initials.
@@ -132,7 +91,7 @@ const ClassesList = () => {
         {
           id: "banner",
           size: 64,
-          header: () => <p className="column-title ml-2">Banner</p>,
+          header: () => <p className="column-title">Banner</p>,
           // Priority: the class's own uploaded banner, then its subject's
           // uploaded image, then a department icon (so an unset banner
           // still reads as "this is a Physics class" instead of bare
@@ -223,21 +182,7 @@ const ClassesList = () => {
           accessorKey: "status",
           size: 130,
           header: () => <p className="column-title">Status</p>,
-          cell: ({ getValue }) => {
-            const status = getValue<string>();
-            const isActive = status === "active";
-            return (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-sm font-medium text-foreground">
-                <span
-                  className={cn(
-                    "h-1.5 w-1.5 rounded-full",
-                    isActive ? "bg-emerald-500" : "bg-muted-foreground",
-                  )}
-                />
-                {STATUS_LABELS[status] ?? status}
-              </span>
-            );
-          },
+          cell: ({ getValue }) => <ClassStatusBadge status={getValue<string>()} />,
         },
         {
           id: "capacity",
@@ -280,14 +225,26 @@ const ClassesList = () => {
   const [searchQuery, setSearchQuery] = useState(() => getFilterValue(filters, "name"));
   const [selectedSubject, setSelectedSubject] = useState(() => getFilterValue(filters, "subject") || "all");
   const [selectedTeacher, setSelectedTeacher] = useState(() => getFilterValue(filters, "teacher") || "all");
-  const [selectedStatus, setSelectedStatus] = useState(() => getFilterValue(filters, "status") || "all");
+  // Multi-select: "active or inactive, but not archived" is the view most
+  // people actually want, so status is a set of checkboxes rather than a
+  // single dropdown value. Empty set == no filter (same as "all").
+  const [selectedStatuses, setSelectedStatuses] = useState<ClassStatus[]>(() => {
+    const raw = getFilterValue(filters, "status");
+    return raw ? (raw.split(",") as ClassStatus[]) : [];
+  });
   const [filtersPopoverOpen, setFiltersPopoverOpen] = useState(false);
   const debouncedSearch = useDebouncedValue(searchQuery, 300);
 
-  const activeFilterCount = [selectedSubject, selectedTeacher, selectedStatus].filter(
-    (value) => value !== "all",
-  ).length;
+  const activeFilterCount =
+    [selectedSubject, selectedTeacher].filter((value) => value !== "all").length +
+    (selectedStatuses.length > 0 ? 1 : 0);
   const hasActiveFilters = Boolean(searchQuery) || activeFilterCount > 0;
+
+  const toggleStatus = (status: ClassStatus, checked: boolean) => {
+    setSelectedStatuses((prev) =>
+      checked ? [...prev, status] : prev.filter((s) => s !== status),
+    );
+  };
 
   // Site24x7's RUM beacon has no duration/metadata API for custom events, so
   // "timing tagged by whether filters were active" is only honestly doable
@@ -315,13 +272,13 @@ const ClassesList = () => {
     if (selectedTeacher !== "all") {
       nextFilters.push({ field: "teacher", operator: "eq" as const, value: selectedTeacher });
     }
-    if (selectedStatus !== "all") {
-      nextFilters.push({ field: "status", operator: "eq" as const, value: selectedStatus });
+    if (selectedStatuses.length > 0) {
+      nextFilters.push({ field: "status", operator: "eq" as const, value: selectedStatuses.join(",") });
     }
     setFilters(nextFilters, "replace");
     setCurrentPage(1); // a stale page number after filtering can read as "no results"
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch, selectedSubject, selectedTeacher, selectedStatus]);
+  }, [debouncedSearch, selectedSubject, selectedTeacher, selectedStatuses]);
 
   // Keeps the search/filter controls in sync when `filters` changes from
   // outside this component's own debounced push above — browser back/forward
@@ -330,14 +287,25 @@ const ClassesList = () => {
     setSearchQuery(getFilterValue(filters, "name"));
     setSelectedSubject(getFilterValue(filters, "subject") || "all");
     setSelectedTeacher(getFilterValue(filters, "teacher") || "all");
-    setSelectedStatus(getFilterValue(filters, "status") || "all");
+    const rawStatus = getFilterValue(filters, "status");
+    // Compare by value and keep the same array reference when nothing
+    // actually changed - a fresh array every run here (even one with
+    // identical contents) makes the filter-push effect below see a
+    // "changed" dependency on every render, which pushes back into
+    // `filters`, which reruns this effect again: an infinite loop, the
+    // exact bug already fixed once this session on a date-range picker.
+    setSelectedStatuses((prev) => {
+      const next = rawStatus ? (rawStatus.split(",") as ClassStatus[]) : [];
+      const same = prev.length === next.length && prev.every((v, i) => v === next[i]);
+      return same ? prev : next;
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
   const clearAllFilters = () => {
     setSelectedSubject("all");
     setSelectedTeacher("all");
-    setSelectedStatus("all");
+    setSelectedStatuses([]);
     setFiltersPopoverOpen(false);
   };
 
@@ -348,7 +316,7 @@ const ClassesList = () => {
     setSearchQuery("");
     setSelectedSubject("all");
     setSelectedTeacher("all");
-    setSelectedStatus("all");
+    setSelectedStatuses([]);
   };
 
   return (
@@ -441,19 +409,20 @@ const ClassesList = () => {
 
                 <div className="space-y-1.5">
                   <span className="text-sm font-medium">Status</span>
-                  <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Filter by status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      {STATUS_OPTIONS.map((status) => (
-                        <SelectItem key={status.value} value={status.value}>
-                          {status.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-2 rounded-md border p-2">
+                    {CLASS_STATUS_OPTIONS.map((status) => (
+                      <label
+                        key={status.value}
+                        className="flex items-center gap-2 text-sm font-normal"
+                      >
+                        <Checkbox
+                          checked={selectedStatuses.includes(status.value)}
+                          onCheckedChange={(checked) => toggleStatus(status.value, checked === true)}
+                        />
+                        {status.label}
+                      </label>
+                    ))}
+                  </div>
                 </div>
 
                 <Button

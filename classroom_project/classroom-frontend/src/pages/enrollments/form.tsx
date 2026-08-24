@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Separator } from "@/components/ui/separator.tsx";
@@ -81,6 +82,20 @@ const EnrollmentForm = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identity?.email]);
+
+  // Arriving from a class's own "Join Class" button (?classId=123): the
+  // class is pre-selected, but the invite code field stays empty - typing
+  // or pasting it is the authorisation step this form exists to check, so
+  // pre-filling it would make both the field and the instructions pointless.
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const paramClassId = searchParams.get("classId");
+    if (!paramClassId) return;
+    const parsed = Number(paramClassId);
+    if (!Number.isFinite(parsed) || getValues("classId") === parsed) return;
+    setValue("classId", parsed, { shouldValidate: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const inviteCodeValue = watch("inviteCode");
   const classIdValue = watch("classId");
@@ -192,6 +207,21 @@ const EnrollmentForm = () => {
                               {classes.map((klass) => {
                                 const remaining = klass.capacity - (klass.enrolledCount ?? 0);
                                 const isFull = remaining <= 0;
+                                // Same precedence as the Join Class button on
+                                // classes/show.tsx - archived/inactive block
+                                // before capacity does, and the label says
+                                // which reason applies rather than just
+                                // showing "Full" for every unselectable class.
+                                const isArchived = klass.status === "archived";
+                                const isInactive = klass.status === "inactive";
+                                const unselectable = isArchived || isInactive || isFull;
+                                const statusLabel = isArchived
+                                  ? "Archived"
+                                  : isInactive
+                                    ? "Closed"
+                                    : isFull
+                                      ? "Full"
+                                      : `${remaining} of ${klass.capacity} seats left`;
                                 const secondary = [klass.subject?.name, klass.department?.name]
                                   .filter(Boolean)
                                   .join(" · ");
@@ -200,9 +230,9 @@ const EnrollmentForm = () => {
                                   <CommandItem
                                     key={klass.id}
                                     value={`${klass.name} ${secondary}`}
-                                    disabled={isFull}
+                                    disabled={unselectable}
                                     onSelect={() => {
-                                      if (isFull) return;
+                                      if (unselectable) return;
                                       setValue("classId", klass.id, { shouldValidate: true });
                                       setComboboxOpen(false);
                                     }}
@@ -224,10 +254,10 @@ const EnrollmentForm = () => {
                                     <span
                                       className={cn(
                                         "ml-auto shrink-0 text-xs",
-                                        isFull ? "font-medium text-destructive" : "text-muted-foreground",
+                                        unselectable ? "font-medium text-destructive" : "text-muted-foreground",
                                       )}
                                     >
-                                      {isFull ? "Full" : `${remaining} of ${klass.capacity} seats left`}
+                                      {statusLabel}
                                     </span>
                                   </CommandItem>
                                 );

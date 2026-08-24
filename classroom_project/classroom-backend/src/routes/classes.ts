@@ -1,7 +1,7 @@
 import express from "express";
 import {db} from "../db/index.js";
 import {classes, classStatusEnum, departments, enrollments, subjects, user} from "../db/schema/index.js";
-import {and, asc, desc, eq, getTableColumns, ilike, or, sql} from "drizzle-orm";
+import {and, asc, desc, eq, getTableColumns, ilike, inArray, or, sql} from "drizzle-orm";
 import {requireAuth} from "../middleware/authorize.js";
 import workspaceMiddleware from "../middleware/workspace.js";
 import {enforceRowQuota} from "../middleware/rowQuota.js";
@@ -13,6 +13,8 @@ const router = express.Router();
 // Escapes ILIKE wildcard/escape characters so a literal search for e.g. "50%"
 // or "a_b" doesn't get interpreted as a wildcard pattern.
 const escapeLike = (value: string) => value.replace(/[%_\\]/g, "\\$&");
+
+const pgErrorCode = (e: any): string | undefined => e?.code ?? e?.cause?.code;
 
 // Fill rate isn't a stored column — compute it inline so it's sortable like any
 // other field (used by the dashboard capacity chart's "View full report" link).
@@ -72,10 +74,57 @@ router.post('/', domainWriteRateLimit, enforceRowQuota(classes, classes.workspac
     }
 })
 
+router.put('/:id', domainWriteRateLimit, async (req, res) => {
+    try {
+        const classId = Number(req.params.id);
+        if (!Number.isFinite(classId)) return res.status(404).json({ error: "No class found" });
+
+        const { name, teacherId, subjectId, capacity, description, status, bannerUrl, bannerCldPubId } = req.body;
+
+        if (capacity !== undefined && (!Number.isFinite(Number(capacity)) || Number(capacity) <= 0)) {
+            return res.status(400).json({ error: "Capacity must be a positive number" });
+        }
+
+        if (subjectId !== undefined) {
+            const [subject] = await db
+                .select({ id: subjects.id })
+                .from(subjects)
+                .where(and(eq(subjects.id, Number(subjectId)), eq(subjects.workspaceId, req.workspaceId!)));
+
+            if (!subject) return res.status(409).json({ error: "No subject found with that id" });
+        }
+
+        const [updatedClass] = await db
+            .update(classes)
+            .set({
+                name,
+                teacherId,
+                subjectId: subjectId !== undefined ? Number(subjectId) : undefined,
+                capacity,
+                description,
+                status,
+                bannerUrl,
+                bannerCldPubId,
+            })
+            .where(and(eq(classes.id, classId), eq(classes.workspaceId, req.workspaceId!)))
+            .returning();
+
+        if (!updatedClass) return res.status(404).json({ error: "No class found" });
+
+        res.status(200).json({ data: updatedClass });
+    } catch (e: any) {
+        if (pgErrorCode(e) === "23503") {
+            return res.status(409).json({ error: "No teacher found with that id" });
+        }
+        console.error(`PUT /classes/:id error: ${e}`);
+        res.status(500).json({ error: "Failed to update class" });
+    }
+});
+
 // Get all classes with optional search, filtering and pagination
 router.get("/", async (req, res) => {
     try {
-        const { search, subject, subjectId, teacher, status, page = 1, limit = 10, sortField, sortOrder } = req.query;
+        const { search, subject, subjectId, departmentId, teacher, status, capacityBucket, page = 1, limit = 10, sortField, sortOrder } = req.query;
 
         const currentPage = Math.max(1, parseInt(String(page), 10) || 1);
         const limitPerPage = Math.min(Math.max(1, parseInt(String(limit), 10) || 10), 100);
@@ -113,17 +162,54 @@ router.get("/", async (req, res) => {
             }
             filterConditions.push(eq(classes.subjectId, parsedSubjectId));
         }
+        // If departmentId filter exists, match every class whose subject
+        // belongs to that department - used by the department detail page's
+        // Classes section. subjects is already joined below, so this filters
+        // against it directly rather than adding a departments join.
+        if (departmentId) {
+            const parsedDepartmentId = Number(departmentId);
+            if (!Number.isFinite(parsedDepartmentId)) {
+                return res.status(400).json({ error: "Invalid departmentId filter" });
+            }
+            filterConditions.push(eq(subjects.departmentId, parsedDepartmentId));
+        }
         // If teacher filter exists, match teacher name
         if (teacher) {
             const teacherPattern = `%${String(teacher).replace(/[%_]/g, '\\$&')}%`;
             filterConditions.push(ilike(user.name, teacherPattern));
         }
-        // If status filter exists, match status exactly
+        // Comma-separated (?status=active,inactive) so "active or inactive,
+        // but not archived" is expressible as one filter.
         if (status) {
-            if (!(classStatusEnum.enumValues as readonly string[]).includes(String(status))) {
+            const requested = String(status).split(",").map((s) => s.trim());
+            const validStatuses = requested.filter((s): s is typeof classStatusEnum.enumValues[number] =>
+                (classStatusEnum.enumValues as readonly string[]).includes(s)
+            );
+            if (validStatuses.length === 0) {
                 return res.status(400).json({ error: "Invalid status filter" });
             }
-            filterConditions.push(eq(classes.status, status as typeof classStatusEnum.enumValues[number]));
+            filterConditions.push(inArray(classes.status, validStatuses));
+        }
+        // Mirrors the dashboard capacity donut's own bucket thresholds
+        // exactly (routes/dashboard.ts's capacity_bucketed CTE) - this is
+        // what makes clicking a donut segment/legend row a real filtered
+        // view instead of decoration. Classes with no capacity set are
+        // never included in any bucket, same as the donut itself excludes
+        // them rather than lying that they're "0-20%".
+        if (capacityBucket) {
+            const bucketRanges: Record<string, { min: number; max: number }> = {
+                "81-100": { min: 0.8, max: 1.0001 },
+                "61-80": { min: 0.6, max: 0.8 },
+                "41-60": { min: 0.4, max: 0.6 },
+                "21-40": { min: 0.2, max: 0.4 },
+                "0-20": { min: -0.0001, max: 0.2 },
+            };
+            const range = bucketRanges[String(capacityBucket)];
+            if (!range) {
+                return res.status(400).json({ error: "Invalid capacityBucket filter" });
+            }
+            filterConditions.push(sql`${classes.capacity} > 0`);
+            filterConditions.push(sql`(${fillRateExpr}) > ${range.min} AND (${fillRateExpr}) <= ${range.max}`);
         }
         const whereClause = and(...filterConditions);
         const countResults = await db

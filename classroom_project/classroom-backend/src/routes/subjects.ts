@@ -1,6 +1,6 @@
 import express from "express";
-import {departments, subjects} from "../db/schema/index.js";
-import {and, desc, eq, getTableColumns, ilike, or, sql} from "drizzle-orm";
+import {classes, departments, enrollments, subjects, user} from "../db/schema/index.js";
+import {and, desc, eq, getTableColumns, ilike, ne, or, sql} from "drizzle-orm";
 import {db} from "../db/index.js";
 import {requireAuth} from "../middleware/authorize.js";
 import workspaceMiddleware from "../middleware/workspace.js";
@@ -90,7 +90,40 @@ router.get("/:id", async (req, res) => {
 
         if (!subject) return res.status(404).json({ error: "No subject found" });
 
-        res.status(200).json({ data: subject });
+        // Deduped via SELECT DISTINCT on the person columns alone - a teacher
+        // running three sections, or a student in two of them, still
+        // produces identical rows for those columns, so DISTINCT collapses
+        // them without needing a separate GROUP BY/window step.
+        const teachers = await db
+            .selectDistinct({
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                image: user.image,
+                imageCldPubId: user.imageCldPubId,
+            })
+            .from(classes)
+            .innerJoin(user, eq(classes.teacherId, user.id))
+            .where(and(eq(classes.subjectId, subjectId), eq(classes.workspaceId, req.workspaceId!)));
+
+        const students = await db
+            .selectDistinct({
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                image: user.image,
+                imageCldPubId: user.imageCldPubId,
+            })
+            .from(enrollments)
+            .innerJoin(classes, eq(enrollments.classId, classes.id))
+            .innerJoin(user, eq(enrollments.studentId, user.id))
+            .where(and(
+                eq(classes.subjectId, subjectId),
+                eq(enrollments.status, "active"),
+                eq(enrollments.workspaceId, req.workspaceId!),
+            ));
+
+        res.status(200).json({ data: { ...subject, teachers, students } });
     } catch (e) {
         console.error(`GET /subjects/:id error: ${e}`);
         res.status(500).json({ error: "Failed to load subject" });
@@ -159,6 +192,22 @@ router.put("/:id", domainWriteRateLimit, async (req, res) => {
             .returning();
 
         if (!updatedSubject) return res.status(404).json({ error: "No subject found" });
+
+        // One photo, one department: uploading an image to any subject spreads
+        // it to every sibling subject in the same department, so a single
+        // upload covers the whole department instead of needing one per
+        // subject. Only fires on a real upload (not on clearing an image), and
+        // never overrides a department change made in this same request.
+        if (imageCldPubId) {
+            await db
+                .update(subjects)
+                .set({ imageCldPubId })
+                .where(and(
+                    eq(subjects.departmentId, updatedSubject.departmentId),
+                    eq(subjects.workspaceId, req.workspaceId!),
+                    ne(subjects.id, subjectId),
+                ));
+        }
 
         res.status(200).json({ data: updatedSubject });
     } catch (e: any) {
