@@ -1,6 +1,6 @@
 import express, { type Request, type Response } from "express";
-import {classes, departments, enrollments, roleEnum, subjects, user} from "../db/schema/index.js";
-import {and, asc, desc, eq, getTableColumns, gte, ilike, inArray, lt, or, sql} from "drizzle-orm";
+import {account, classes, departments, enrollments, roleEnum, subjects, user} from "../db/schema/index.js";
+import {and, asc, desc, eq, getTableColumns, gte, ilike, inArray, lt, notExists, or, sql} from "drizzle-orm";
 import {db} from "../db/index.js";
 import {randomUUID} from "crypto";
 import {requireAdmin, requireAuth} from "../middleware/authorize.js";
@@ -14,6 +14,22 @@ const pgErrorCode = (e: any): string | undefined => e?.code ?? e?.cause?.code;
 // only as a raw DB error (500) — this gives a clean 400 instead.
 const isValidRole = (value: unknown): value is typeof roleEnum.enumValues[number] =>
     typeof value === "string" && (roleEnum.enumValues as readonly string[]).includes(value);
+
+// The fixture pool (seedWorkspace.ts's upsertFixtureUsers) inserts `user`
+// rows directly and never creates a matching `account` row - only a real
+// OAuth sign-in does that. This is the same signal create-real-users-view.ts
+// uses to tell fictional roster entries apart from actual people.
+//
+// The People/Faculty/Students pages are a public-facing demo roster of a
+// fictional university, not a directory of this app's real visitors - a
+// real person's name and email must never appear in another visitor's
+// browser just because they signed in to try the demo. Excluding any row
+// with a real account keeps every real identity (including the admin's)
+// out of this listing and out of direct-id lookups below, regardless of
+// whatever role Better Auth's schema default happened to assign them.
+const isFixtureUser = notExists(
+    db.select({ id: account.id }).from(account).where(eq(account.userId, user.id))
+);
 
 const SORTABLE_USER_FIELDS = {
     id: user.id,
@@ -98,8 +114,10 @@ router.get("/", requireAuth, workspaceMiddleware, async (req, res) => {
             exclusiveUpperBound.setDate(exclusiveUpperBound.getDate() + 1);
             filterConditions.push(lt(user.createdAt, exclusiveUpperBound));
         }
-        // Combine all filters using AND if any exist
-        const whereClause = filterConditions.length > 0 ? and(...filterConditions) : undefined;
+        // Combine all filters using AND if any exist - isFixtureUser always
+        // applies, not just when other filters are present (see its comment).
+        filterConditions.push(isFixtureUser);
+        const whereClause = and(...filterConditions);
         const countResults = await db
             .select({ count: sql<number>`count(*)` })
             .from(user)
@@ -142,9 +160,10 @@ router.get("/", requireAuth, workspaceMiddleware, async (req, res) => {
 // shared across every workspace but their classes/enrollments are not.
 router.get("/:id", requireAuth, workspaceMiddleware, async (req: Request, res: Response) => {
     try {
-        const userId = req.params.id;
+        const userId = String(req.params.id);
 
-        const [foundUser] = await db.select().from(user).where(sql`${user.id} = ${userId}`);
+        const whereClause = and(eq(user.id, userId), isFixtureUser);
+        const [foundUser] = await db.select().from(user).where(whereClause);
 
         if (!foundUser) return res.status(404).json({ error: "No user found" });
 
