@@ -50,7 +50,12 @@ const SubjectsList = () => {
         {
           id: "name",
           accessorKey: "name",
-          meta: { flex: true, className: "w-[320px]" },
+          // Fixed and deterministic, not wider than it needs to be - this
+          // column is pinned, so its width is what's permanently visible on
+          // a narrow screen while the rest of the row scrolls underneath it.
+          // 320px left almost nothing else on a phone; matches Classes'
+          // pinned Name column width instead.
+          meta: { flex: true, className: "w-[240px]" },
           header: () => <p className="column-title">Name</p>,
           cell: ({ getValue, row }) => (
             <Link
@@ -77,11 +82,14 @@ const SubjectsList = () => {
         {
           id: "description",
           accessorKey: "description",
-          // min-w keeps this column from collapsing to nothing on a narrow
-          // viewport (three fixed-width columns alone already exceed a
-          // phone's screen) - the table scrolls horizontally instead, same
-          // as Faculty below.
-          meta: { flex: true, className: "min-w-[220px]" },
+          // A fixed width via `w-`, not `min-w-` - table-layout:fixed (set
+          // on the shared DataTable) only sizes a column from an explicit
+          // `width`, never from `min-width`. A `min-w-` here was silently
+          // collapsing this column to ~0 width instead of the intended
+          // minimum, which is what made Description render blank on a
+          // phone: the table scrolls horizontally instead of collapsing to
+          // nothing, same as every other list page's fixed-width columns.
+          meta: { flex: true, className: "w-[220px]" },
           header: () => <p className="column-title pl-8">Description</p>,
           cell: ({ getValue }) => (
             <span className="block truncate text-ellipsis whitespace-nowrap pl-8 pr-4 text-muted-foreground">

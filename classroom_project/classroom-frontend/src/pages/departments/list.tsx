@@ -117,6 +117,13 @@ const DepartmentsList = () => {
       },
       syncWithLocation: true,
     },
+    // Below md the table scrolls horizontally inside its card rather than
+    // collapsing into stacked cards - reuses DataTable's existing pinned-
+    // column sticky logic so Name stays visible while scrolling right,
+    // consistent with every other list page (Classes/Subjects/Users).
+    initialState: {
+      columnPinning: { left: ["name"] },
+    },
   });
 
   const { filters, setFilters } = DepartmentsTable.refineCore;

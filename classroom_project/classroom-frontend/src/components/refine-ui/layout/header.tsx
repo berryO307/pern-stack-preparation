@@ -1,4 +1,4 @@
-import { useRefineOptions } from "@refinedev/core";
+import { useLink, useRefineOptions } from "@refinedev/core";
 import { ThemeToggle } from "@/components/refine-ui/theme/theme-toggle";
 import { useSidebar, SidebarTrigger } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
@@ -26,9 +26,10 @@ function DesktopHeader() {
 }
 
 function MobileHeader() {
-  const { open, isMobile } = useSidebar();
+  const { open, isMobile, setOpenMobile } = useSidebar();
 
   const { title } = useRefineOptions();
+  const Link = useLink();
 
   return (
     <header
@@ -57,7 +58,9 @@ function MobileHeader() {
         })}
       />
 
-      <div
+      <Link
+        to="/"
+        onClick={() => isMobile && setOpenMobile(false)}
         className={cn(
           "whitespace-nowrap",
           "flex",
@@ -89,7 +92,7 @@ function MobileHeader() {
         >
           {title.text}
         </h2>
-      </div>
+      </Link>
 
       <ThemeToggle className={cn("h-8", "w-8")} />
     </header>
