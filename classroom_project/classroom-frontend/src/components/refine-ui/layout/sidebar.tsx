@@ -189,6 +189,7 @@ function SidebarItemCollapsible({ item, selectedKey }: MenuItemProps) {
 function SidebarItemDropdown({ item, selectedKey }: MenuItemProps) {
   const { children } = item;
   const Link = useLink();
+  const { isMobile, setOpenMobile } = useShadcnSidebar();
 
   return (
     <DropdownMenu>
@@ -204,6 +205,7 @@ function SidebarItemDropdown({ item, selectedKey }: MenuItemProps) {
             <DropdownMenuItem key={childKey || child.name} asChild>
               <Link
                 to={child.route || ""}
+                onClick={() => isMobile && setOpenMobile(false)}
                 className={cn("flex w-full items-center gap-2", {
                   "bg-accent text-accent-foreground": isSelected,
                 })}
@@ -333,6 +335,7 @@ function SidebarButton({
   ...props
 }: SidebarButtonProps) {
   const Link = useLink();
+  const { isMobile, setOpenMobile } = useShadcnSidebar();
 
   const buttonContent = (
     <>
@@ -374,7 +377,11 @@ function SidebarButton({
       {...props}
     >
       {asLink && item.route ? (
-        <Link to={item.route} className={cn("flex w-full items-center gap-2")}>
+        <Link
+          to={item.route}
+          onClick={() => isMobile && setOpenMobile(false)}
+          className={cn("flex w-full items-center gap-2")}
+        >
           {buttonContent}
         </Link>
       ) : (
