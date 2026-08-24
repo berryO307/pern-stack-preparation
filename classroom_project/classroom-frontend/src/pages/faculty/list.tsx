@@ -9,6 +9,7 @@ const FacultyList = () => (
     subtitle="Browse and manage faculty members"
     defaultRole="teacher"
     emptyStateNoun="faculty members"
+    showResource="faculty"
   />
 );
 
