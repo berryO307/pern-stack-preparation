@@ -15,14 +15,17 @@ import { Header } from "./components/refine-ui/layout/header";
 import { useNotificationProvider } from "./components/refine-ui/notification/use-notification-provider";
 import { Toaster } from "./components/refine-ui/notification/toaster";
 import { ThemeProvider } from "./components/refine-ui/theme/theme-provider";
+import { BrandMark } from "./components/brand-mark.tsx";
 import "./App.css";
 import Dashboard from "@/pages/dashboard.tsx";
 import { Building2, BookOpen, ClipboardList, GraduationCap, House, Users } from "lucide-react";
 import SubjectsList from "@/pages/subjects/list.tsx";
 import SubjectsCreate from "@/pages/subjects/create.tsx";
+import SubjectsEdit from "@/pages/subjects/edit.tsx";
 import SubjectsShow from "@/pages/subjects/show.tsx";
 import ClassesList from "@/pages/classes/list.tsx";
 import ClassesCreate from "@/pages/classes/create.tsx";
+import ClassesEdit from "@/pages/classes/edit.tsx";
 import ClassesShow from "@/pages/classes/show.tsx";
 import DepartmentsList from "@/pages/departments/list.tsx";
 import DepartmentsCreate from "@/pages/departments/create.tsx";
@@ -33,6 +36,7 @@ import UsersCreate from "@/pages/users/create.tsx";
 import UsersEdit from "@/pages/users/edit.tsx";
 import UsersShow from "@/pages/users/show.tsx";
 import FacultyList from "@/pages/faculty/list.tsx";
+import FacultyShow from "@/pages/faculty/show.tsx";
 import EnrollmentsList from "@/pages/enrollments/list.tsx";
 import EnrollmentsCreate from "@/pages/enrollments/create.tsx";
 import { dataProvider } from "@/providers/data.ts";
@@ -52,6 +56,10 @@ function App() {
               syncWithLocation: true,
               warnWhenUnsavedChanges: true,
               projectId: "fKSq8A-kTepPr-o1XM6J",
+              title: {
+                icon: <BrandMark />,
+                text: "Academic Hub",
+              },
             }}
             resources={[
               {
@@ -71,12 +79,14 @@ function App() {
                 name: "subjects",
                 list: "/subjects",
                 create: "/subjects/create",
+                edit: "/subjects/edit/:id",
                 show: "/subjects/show/:id",
                 meta: { label: "Subjects", icon: <BookOpen /> },
               },
               {
                 name: "faculty",
                 list: "/faculty",
+                show: "/faculty/show/:id",
                 meta: { label: "Faculty", icon: <Users /> },
               },
               {
@@ -89,6 +99,7 @@ function App() {
                 name: "classes",
                 list: "/classes",
                 create: "/classes/create",
+                edit: "/classes/edit/:id",
                 show: "/classes/show/:id",
                 meta: { label: "Classes", icon: <GraduationCap /> },
               },
@@ -98,10 +109,11 @@ function App() {
                 create: "/users/create",
                 edit: "/users/edit/:id",
                 show: "/users/show/:id",
-                // Full all-roles user management stays reachable by URL (and
-                // linked from Faculty/KPI cards); the sidebar shows Faculty
-                // instead so the nav isn't two overlapping "people" entries.
-                meta: { label: "Users", icon: <Users />, hide: true },
+                // Full all-roles user management, distinct from Faculty
+                // (role=teacher only) - the Total students KPI card links
+                // here role-filtered, and that link needs to land somewhere
+                // the nav itself acknowledges, not an orphan route.
+                meta: { label: "Users", icon: <Users /> },
               },
             ]}
           >
@@ -128,10 +140,12 @@ function App() {
                 <Route path="subjects">
                   <Route index element={<SubjectsList />} />
                   <Route path="create" element={<SubjectsCreate />} />
+                  <Route path="edit/:id" element={<SubjectsEdit />} />
                   <Route path="show/:id" element={<SubjectsShow />} />
                 </Route>
                 <Route path="faculty">
                   <Route index element={<FacultyList />} />
+                  <Route path="show/:id" element={<FacultyShow />} />
                 </Route>
                 <Route path="enrollments">
                   <Route index element={<EnrollmentsList />} />
@@ -140,6 +154,7 @@ function App() {
                 <Route path="classes">
                   <Route index element={<ClassesList />} />
                   <Route path="create" element={<ClassesCreate />} />
+                  <Route path="edit/:id" element={<ClassesEdit />} />
                   <Route path="show/:id" element={<ClassesShow />} />
                 </Route>
                 <Route path="users">
@@ -177,7 +192,11 @@ function App() {
             </Routes>
             <Toaster />
             <UnsavedChangesNotifier />
-            <DocumentTitleHandler />
+            <DocumentTitleHandler
+              handler={({ autoGeneratedTitle }) =>
+                autoGeneratedTitle.replace(/ \| Refine$/, " | Academic Hub")
+              }
+            />
           </Refine>
           <DevtoolsPanel />
         </DevtoolsProvider>

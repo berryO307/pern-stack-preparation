@@ -15,7 +15,9 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Coffee, Linkedin, Github as GithubIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AUTHOR } from "@/constants/author.ts";
 
 type SocialProvider = "google" | "github";
 
@@ -128,6 +130,44 @@ export const SignInForm = () => {
           </Button>
         </CardContent>
       </Card>
+
+      <div className="mt-8 flex flex-col items-center gap-2 text-center">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>
+            Built by <span className="font-medium text-foreground">{AUTHOR.name}</span>
+          </span>
+          <a
+            href={AUTHOR.linkedinUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`${AUTHOR.name} on LinkedIn`}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <Linkedin className="size-4" />
+          </a>
+          <a
+            href={AUTHOR.githubUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`${AUTHOR.name} on GitHub`}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <GithubIcon className="size-4" />
+          </a>
+          <a
+            href={AUTHOR.buyMeACoffeeUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Buy me a coffee"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <Coffee className="size-4" />
+          </a>
+        </div>
+        <p className="max-w-sm text-xs text-muted-foreground">
+          This is a demo workspace — your data lives in an isolated sandbox that resets automatically, so feel free to explore freely.
+        </p>
+      </div>
     </div>
   );
 };
