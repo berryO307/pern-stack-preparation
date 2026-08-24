@@ -235,6 +235,7 @@ type PlanClass = {
     teacherIndex: number;
     fillTarget: number;
     status: ClassStatus;
+    createdAt: Date;
 };
 
 type EnrollmentStatus = "active" | "waitlisted" | "dropped";
@@ -248,6 +249,19 @@ const fillBucket = (ratio: number): string =>
     ratio > 0.8 ? "81-100" : ratio > 0.6 ? "61-80" : ratio > 0.4 ? "41-60" : ratio > 0.2 ? "21-40" : "0-20";
 
 const assertSeedPlanSanity = (classesPlan: PlanClass[], enrollmentsPlan: PlanEnrollment[], now: Date) => {
+    // No seeded row may be dated after the plan's own reference "now" - a
+    // future-dated row broke Recent Activity's relative-time display and
+    // inflated the current month's KPI count (see FINDINGS.md). This is a
+    // hard fail, not a warning: it means a date-range computation elsewhere
+    // in this function let its upper bound drift past `now`.
+    const futureClasses = classesPlan.filter((c) => c.createdAt > now);
+    const futureEnrollments = enrollmentsPlan.filter((e) => e.createdAt > now);
+    if (futureClasses.length > 0 || futureEnrollments.length > 0) {
+        throw new Error(
+            `Seed plan sanity check failed: ${futureClasses.length} class(es) and ${futureEnrollments.length} enrollment(s) dated after "now" (${now.toISOString()})`
+        );
+    }
+
     const buckets = new Set(
         classesPlan.map((cls, i) => {
             const active = enrollmentsPlan.filter((e) => e.classIndex === i && e.status === "active").length;
@@ -285,6 +299,18 @@ const assertSeedPlanSanity = (classesPlan: PlanClass[], enrollmentsPlan: PlanEnr
 const generateSeedPlan = (seed: number): SeedPlan => {
     faker.seed(seed);
 
+    const now = new Date();
+    const monthWindows = buildMonthWindows(now);
+    // Classes need to predate the trailing-12-month window almost entirely,
+    // not just land somewhere inside it - a class "created" in month 3 of
+    // the window has no fill-rate data for months 0-2, which is exactly
+    // what turns the trend chart's early months into gaps. A small fraction
+    // land recently instead (last ~50 days), which is what gives the
+    // classes/faculty KPI cards a real non-zero previous-period count.
+    const backboneStart = new Date(monthWindows[11]!.start.getTime() - 60 * 24 * 60 * 60 * 1000);
+    const backboneEnd = monthWindows[11]!.start;
+    const recentStart = new Date(now.getTime() - 50 * 24 * 60 * 60 * 1000);
+
     const usedCodes = new Set<string>();
     const classesPlan: PlanClass[] = [];
     let fillIndex = 0;
@@ -301,6 +327,10 @@ const generateSeedPlan = (seed: number): SeedPlan => {
                     throw new Error("FILL_TARGETS is shorter than the generated class count");
                 }
                 const status = faker.helpers.weightedArrayElement(CLASS_STATUS_WEIGHTS);
+                const isRecent = faker.number.float({ min: 0, max: 1 }) < 0.18;
+                const createdAt = isRecent
+                    ? pickWeekdayLeaningDate(recentStart, now)
+                    : pickWeekdayLeaningDate(backboneStart, backboneEnd);
                 classesPlan.push({
                     departmentCode: dept.code,
                     subjectCode: subject.code,
@@ -310,13 +340,12 @@ const generateSeedPlan = (seed: number): SeedPlan => {
                     teacherIndex: classesPlan.length % TEACHER_NAMES.length,
                     fillTarget,
                     status,
+                    createdAt,
                 });
             }
         }
     }
 
-    const now = new Date();
-    const monthWindows = buildMonthWindows(now);
     const monthCoverage = new Set<number>();
     const enrollmentsPlan: PlanEnrollment[] = [];
 
@@ -425,18 +454,43 @@ export const seedWorkspace = async (workspaceId: string, initialSeed: number): P
     }
     if (!plan) throw new Error(`seedWorkspace: failed to generate a sane seed plan after ${MAX_PLAN_ATTEMPTS} attempts`);
 
+    // Departments/subjects are the curriculum's backbone - always predate
+    // the trailing-12-month window, same reasoning as classes above. Not
+    // part of the faker-seeded plan (they're driven by the fixed catalog,
+    // not randomised counts/fill targets), but still deterministic overall
+    // since faker's seed was already set by generateSeedPlan and its stream
+    // just continues here.
+    const catalogNow = new Date();
+    const catalogWindows = buildMonthWindows(catalogNow);
+    const catalogBackboneStart = new Date(catalogWindows[11]!.start.getTime() - 60 * 24 * 60 * 60 * 1000);
+    const catalogBackboneEnd = catalogWindows[11]!.start;
+    const catalogRecentStart = new Date(catalogNow.getTime() - 50 * 24 * 60 * 60 * 1000);
+
     const deptIds: Record<string, number> = {};
     for (const dept of DEPARTMENT_CATALOG) {
         const [created] = await db
             .insert(departments)
-            .values({ workspaceId, code: dept.code, name: dept.name, description: dept.description, origin: "seed" })
+            .values({
+                workspaceId,
+                code: dept.code,
+                name: dept.name,
+                description: dept.description,
+                origin: "seed",
+                createdAt: pickWeekdayLeaningDate(catalogBackboneStart, catalogBackboneEnd),
+            })
             .returning({ id: departments.id });
         deptIds[dept.code] = created!.id;
     }
 
+    // A couple of subjects land recently rather than 100% backbone, so the
+    // subjects KPI card also gets a real (non-zero) previous-period count -
+    // otherwise it's stuck null like classes/faculty were before this fix.
+    let recentSubjectCount = 0;
     const subjectIds: Record<string, number> = {};
     for (const dept of DEPARTMENT_CATALOG) {
         for (const subject of dept.subjects) {
+            const isRecent = recentSubjectCount < 2 && faker.number.float({ min: 0, max: 1 }) < 0.12;
+            if (isRecent) recentSubjectCount++;
             const [created] = await db
                 .insert(subjects)
                 .values({
@@ -446,6 +500,9 @@ export const seedWorkspace = async (workspaceId: string, initialSeed: number): P
                     description: subject.description,
                     departmentId: deptIds[dept.code]!,
                     origin: "seed",
+                    createdAt: isRecent
+                        ? pickWeekdayLeaningDate(catalogRecentStart, catalogNow)
+                        : pickWeekdayLeaningDate(catalogBackboneStart, catalogBackboneEnd),
                 })
                 .returning({ id: subjects.id });
             subjectIds[subject.code] = created!.id;
@@ -467,6 +524,7 @@ export const seedWorkspace = async (workspaceId: string, initialSeed: number): P
                 inviteCode: cls.inviteCode,
                 schedules: [],
                 origin: "seed",
+                createdAt: cls.createdAt,
             })
             .returning({ id: classes.id });
         classIds.push(created!.id);

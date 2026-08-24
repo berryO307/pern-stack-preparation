@@ -33,6 +33,8 @@ import { ChevronRight, ListIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CommandSearch } from "@/components/refine-ui/layout/command-search";
 import { SidebarUserMenu } from "@/components/refine-ui/layout/sidebar-user-menu";
+import { BuiltByRow } from "@/components/refine-ui/layout/built-by-row";
+import { BuyMeACoffeeCard } from "@/components/refine-ui/layout/buy-me-a-coffee-card";
 
 export function Sidebar() {
   const { open } = useShadcnSidebar();
@@ -75,7 +77,10 @@ export function Sidebar() {
         })}
       >
         <Separator className="mb-2" />
+        <BuyMeACoffeeCard />
         <SidebarUserMenu />
+        <Separator className="my-2" />
+        <BuiltByRow />
       </ShadcnSidebarFooter>
     </ShadcnSidebar>
   );
@@ -259,9 +264,11 @@ function SidebarHeader() {
       >
         <div>{title.icon}</div>
         <h2
+          aria-hidden="true"
           className={cn(
-            "text-sm",
-            "font-bold",
+            "text-base",
+            "font-semibold",
+            "tracking-tight",
             "transition-opacity",
             "duration-200",
             {
