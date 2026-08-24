@@ -271,7 +271,19 @@ router.get("/summary", requireAuth, workspaceMiddleware, dashboardRateLimit, asy
 
         if (!summary) throw new Error("Summary query returned no row");
 
-        res.setHeader("Cache-Control", "private, max-age=30, stale-while-revalidate=120");
+        // Was "private, max-age=30, stale-while-revalidate=120" - but this
+        // response is scoped to whichever workspace req.workspaceId! resolved
+        // to for the CURRENT session, and nothing here varies the cache key
+        // by session/cookie (no Vary header, and the URL itself is identical
+        // for every visitor: /dashboard/summary?tz=...). A browser's HTTP
+        // cache keys purely on method+URL, so signing out and back in as a
+        // different account in the same browser tab could - and did - get
+        // served the PREVIOUS account's cached response for up to 150s
+        // (max-age + stale-while-revalidate), showing stale KPIs that have
+        // nothing to do with the new session's actual workspace. This data
+        // is cheap enough to recompute (see the parity/perf notes above)
+        // that "never cache it client-side" is the safe default here.
+        res.setHeader("Cache-Control", "private, no-store");
         res.status(200).json({ data: summary });
     } catch (e) {
         console.error(`GET /dashboard/summary error: ${e}`);
