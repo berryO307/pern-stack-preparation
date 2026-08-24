@@ -4,7 +4,7 @@ import { BACKEND_BASE_URL } from "@/constants";
 import { reportRumError } from "@/lib/rum.ts";
 import type { DashboardSummary } from "@/types";
 
-export function useDashboardSummary(departmentId?: number) {
+export function useDashboardSummary(departmentId?: number | "all") {
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const { query } = useCustom<DashboardSummary, HttpError>({

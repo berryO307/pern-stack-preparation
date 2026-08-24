@@ -1,3 +1,11 @@
+export type PersonSummary = {
+  id: string;
+  name: string;
+  email: string;
+  image?: string | null;
+  imageCldPubId?: string | null;
+};
+
 export type Subject = {
   id: number;
   name: string;
@@ -6,6 +14,8 @@ export type Subject = {
   department: Department | null;
   imageCldPubId?: string | null;
   createdAt?: string;
+  teachers?: PersonSummary[];
+  students?: PersonSummary[];
 };
 
 export type ListResponse<T = unknown> = {
@@ -113,6 +123,10 @@ export type Department = {
   description?: string;
   subjectCount?: number;
   subjects?: Subject[];
+  classesCount?: number;
+  enrolledCount?: number;
+  teachers?: PersonSummary[];
+  students?: PersonSummary[];
   createdAt?: string;
   updatedAt?: string;
 };
@@ -138,7 +152,7 @@ export type ClassDetails = {
   id: number;
   name: string;
   description: string;
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "archived";
   capacity: number;
   enrolledCount?: number;
   courseCode: string;
@@ -157,6 +171,7 @@ export type Enrollment = {
   studentId: string;
   classId: number;
   workspaceId?: string;
+  status?: "active" | "waitlisted" | "dropped";
   student?: User;
   class?: Class;
   createdAt?: string;
@@ -181,10 +196,9 @@ export type CapacityBucket = {
   classes: number;
 };
 
-export type FillRatePoint = {
+export type EnrollmentsPoint = {
   month: string;
-  selected: number | null;
-  institution: number | null;
+  count: number;
 };
 
 export type RecentActivityItem = {
@@ -204,8 +218,10 @@ export type DashboardSummary = {
   };
   capacityDistribution: CapacityBucket[];
   capacityExcluded: number;
-  fillRateDepartmentId: number | null;
-  fillRateTrend: FillRatePoint[];
+  enrollmentsDepartmentId: number | null;
+  enrollmentsTrend: EnrollmentsPoint[];
+  enrollmentsTotal12mo: number;
+  enrollmentsDeltaPct: number | null;
   recentActivity: RecentActivityItem[];
 };
 
