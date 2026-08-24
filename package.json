@@ -1,0 +1,9 @@
+{
+  "name": "pern-stack-preparation",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Repo-level tooling only (git hooks, commit conventions) - the application lives in classroom_project/.",
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks && git config commit.template .gitmessage"
+  }
+}

@@ -1,0 +1,13 @@
+# type(scope): subject
+#
+# One commit, one concern - application code (classroom_project/), docs
+# (docs/, README.md), or chore/tooling, never mixed in the same commit.
+# GitHub's per-path file listing shows whichever commit last touched
+# that path, so a mixed commit mislabels a directory with an unrelated
+# message.
+#
+# Types: feat fix docs chore refactor test perf build ci
+# Subject: imperative mood, lower case after the colon, no trailing
+# period, under 72 characters.
+#
+# Body (optional, blank line above it): the why, not the what.

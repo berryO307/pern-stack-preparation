@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Rejects a commit that stages changes spanning more than one concern
+# (application code vs docs vs chore/tooling). See CONTRIBUTING.md's
+# "Commit conventions" section for why: GitHub's per-path file listing
+# shows whatever commit last touched that path, so a mixed commit
+# mislabels whichever directory it touches only incidentally.
+#
+# Escape hatch for a genuine cross-cutting change (e.g. a refactor that
+# legitimately updates its own docs in the same commit):
+#   SKIP_COMMIT_SCOPE_CHECK=1 git commit -m "..."
+
+if [ "$SKIP_COMMIT_SCOPE_CHECK" = "1" ]; then
+    exit 0
+fi
+
+staged=$(git diff --cached --name-only)
+if [ -z "$staged" ]; then
+    exit 0
+fi
+
+concerns=""
+offenders_app=""
+offenders_docs=""
+offenders_chore=""
+
+while IFS= read -r path; do
+    case "$path" in
+        classroom_project/*)
+            concerns="$concerns app"
+            offenders_app="$offenders_app  $path
+"
+            ;;
+        .gitignore|.githooks/*|.gitmessage|package.json|.github/*|CONTRIBUTING.md)
+            concerns="$concerns chore"
+            offenders_chore="$offenders_chore  $path
+"
+            ;;
+        docs/*|README.md|*.md)
+            concerns="$concerns docs"
+            offenders_docs="$offenders_docs  $path
+"
+            ;;
+        *)
+            # Unclassified paths don't force a concern - avoids the hook
+            # breaking on files this list hasn't anticipated.
+            ;;
+    esac
+done <<< "$staged"
+
+distinct=$(echo "$concerns" | tr ' ' '\n' | sort -u | grep -v '^$' | wc -l)
+
+if [ "$distinct" -gt 1 ]; then
+    echo "pre-commit: this commit spans more than one concern - split it."
+    echo ""
+    [ -n "$offenders_app" ] && printf "  application (classroom_project/):\n%s" "$offenders_app"
+    [ -n "$offenders_docs" ] && printf "  docs (docs/, README.md, *.md):\n%s" "$offenders_docs"
+    [ -n "$offenders_chore" ] && printf "  chore/tooling:\n%s" "$offenders_chore"
+    echo ""
+    echo "See CONTRIBUTING.md - one commit, one concern, so GitHub's"
+    echo "per-path file listing shows the right message next to each folder."
+    echo ""
+    echo "Genuine cross-cutting change? Bypass with:"
+    echo "  SKIP_COMMIT_SCOPE_CHECK=1 git commit -m \"...\""
+    exit 1
+fi
+
+exit 0
