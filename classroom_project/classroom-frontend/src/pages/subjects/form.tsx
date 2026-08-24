@@ -8,6 +8,7 @@ import {
 import { Separator } from "@/components/ui/separator.tsx";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "@refinedev/react-hook-form";
+import { useBack } from "@refinedev/core";
 import { useList } from "@refinedev/core";
 import { subjectSchema } from "@/lib/schema.ts";
 import * as z from "zod";
@@ -32,12 +33,14 @@ import { Loader2 } from "lucide-react";
 import UploadWidget from "@/components/upload-widget.tsx";
 import type { UploadWidgetValue } from "@/types";
 import type { Department } from "@/types";
+import { Skeleton } from "@/components/ui/skeleton.tsx";
 
 type SubjectFormProps = {
   action: "create" | "edit";
 };
 
 const SubjectForm = ({ action }: SubjectFormProps) => {
+  const back = useBack();
   const form = useForm({
     resolver: zodResolver(subjectSchema),
     refineCoreProps: {
@@ -106,6 +109,16 @@ const SubjectForm = ({ action }: SubjectFormProps) => {
         <Separator />
 
         <CardContent className="mt-7">
+          {isLoadingRecord ? (
+            <div className="space-y-5">
+              <Skeleton className="h-40 w-full rounded-md" />
+              <Skeleton className="h-10 w-full" />
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            </div>
+          ) : (
           <Form {...form}>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
               <FormField
@@ -216,27 +229,40 @@ const SubjectForm = ({ action }: SubjectFormProps) => {
 
               <Separator />
 
-              <Button
-                type="submit"
-                size="lg"
-                className="w-full"
-                disabled={formLoading || isLoadingRecord}
-              >
-                {formLoading ? (
-                  <div className="flex gap-1">
-                    <span>
-                      {action === "create" ? "Creating Subject..." : "Saving Changes..."}
-                    </span>
-                    <Loader2 className="inline-block ml-2 animate-spin" />
-                  </div>
-                ) : action === "create" ? (
-                  "Create Subject"
-                ) : (
-                  "Save Changes"
-                )}
-              </Button>
+              <div className="flex flex-col gap-2">
+                <Button
+                  type="submit"
+                  size="lg"
+                  className="w-full"
+                  disabled={formLoading || isLoadingRecord}
+                >
+                  {formLoading ? (
+                    <div className="flex gap-1">
+                      <span>
+                        {action === "create" ? "Creating Subject..." : "Saving Changes..."}
+                      </span>
+                      <Loader2 className="inline-block ml-2 animate-spin" />
+                    </div>
+                  ) : action === "create" ? (
+                    "Create Subject"
+                  ) : (
+                    "Save Changes"
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="w-full"
+                  onClick={() => back()}
+                  disabled={formLoading}
+                >
+                  Back
+                </Button>
+              </div>
             </form>
           </Form>
+          )}
         </CardContent>
       </Card>
     </div>

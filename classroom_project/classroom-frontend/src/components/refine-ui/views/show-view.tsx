@@ -37,6 +37,10 @@ type ShowViewHeaderProps = PropsWithChildren<{
    * pages non-admins can view but not edit.
    */
   hideEdit?: boolean;
+  /** Forwarded to Breadcrumb - see its own prop for what this replaces. */
+  breadcrumbLastLabel?: string;
+  /** Forwarded to RefreshButton's extraOnClick - see its own prop. */
+  onRefresh?: () => void;
 }>;
 
 export const ShowViewHeader = ({
@@ -45,6 +49,8 @@ export const ShowViewHeader = ({
   wrapperClassName,
   headerClassName,
   hideEdit,
+  breadcrumbLastLabel,
+  onRefresh,
 }: ShowViewHeaderProps) => {
   const back = useBack();
 
@@ -68,7 +74,7 @@ export const ShowViewHeader = ({
     <div className={cn("flex flex-col", "gap-4", wrapperClassName)}>
       <div className="flex items-center relative gap-2">
         <div className="bg-background z-[2] pr-4">
-          <Breadcrumb />
+          <Breadcrumb overrideLastLabel={breadcrumbLastLabel} />
         </div>
         <Separator className={cn("absolute", "left-0", "right-0", "z-[1]")} />
       </div>
@@ -94,6 +100,7 @@ export const ShowViewHeader = ({
             variant="outline"
             recordItemId={recordItemId}
             resource={resourceName}
+            extraOnClick={onRefresh}
           />
           {!hideEdit && (
             <EditButton

@@ -1,6 +1,6 @@
 import express from "express";
 import { db } from "../db/index.js";
-import { departments, subjects } from "../db/schema/index.js";
+import { classes, departments, enrollments, subjects, user } from "../db/schema/index.js";
 import { and, asc, desc, eq, getTableColumns, ilike, or, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/authorize.js";
 import workspaceMiddleware from "../middleware/workspace.js";
@@ -106,7 +106,70 @@ router.get("/:id", async (req, res) => {
             .where(and(eq(subjects.departmentId, departmentId), eq(subjects.workspaceId, req.workspaceId!)))
             .orderBy(desc(subjects.createdAt));
 
-        res.status(200).json({ data: { ...department, subjects: departmentSubjects } });
+        // Stats + Teachers/Students, scoped through subjects -> classes since
+        // neither table has its own departmentId column. "Enrolled" here
+        // means active enrollment rows (seats filled), the same definition
+        // classes.ts already uses for its own per-class enrolledCount - one
+        // definition of "enrolled" across the app, not a second one just for
+        // this page.
+        const [classStats] = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(classes)
+            .innerJoin(subjects, eq(classes.subjectId, subjects.id))
+            .where(and(eq(subjects.departmentId, departmentId), eq(classes.workspaceId, req.workspaceId!)));
+
+        const [enrollmentStats] = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(enrollments)
+            .innerJoin(classes, eq(enrollments.classId, classes.id))
+            .innerJoin(subjects, eq(classes.subjectId, subjects.id))
+            .where(and(
+                eq(subjects.departmentId, departmentId),
+                eq(enrollments.status, "active"),
+                eq(enrollments.workspaceId, req.workspaceId!),
+            ));
+
+        const teachers = await db
+            .selectDistinct({
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                image: user.image,
+                imageCldPubId: user.imageCldPubId,
+            })
+            .from(classes)
+            .innerJoin(subjects, eq(classes.subjectId, subjects.id))
+            .innerJoin(user, eq(classes.teacherId, user.id))
+            .where(and(eq(subjects.departmentId, departmentId), eq(classes.workspaceId, req.workspaceId!)));
+
+        const students = await db
+            .selectDistinct({
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                image: user.image,
+                imageCldPubId: user.imageCldPubId,
+            })
+            .from(enrollments)
+            .innerJoin(classes, eq(enrollments.classId, classes.id))
+            .innerJoin(subjects, eq(classes.subjectId, subjects.id))
+            .innerJoin(user, eq(enrollments.studentId, user.id))
+            .where(and(
+                eq(subjects.departmentId, departmentId),
+                eq(enrollments.status, "active"),
+                eq(enrollments.workspaceId, req.workspaceId!),
+            ));
+
+        res.status(200).json({
+            data: {
+                ...department,
+                subjects: departmentSubjects,
+                classesCount: Number(classStats?.count ?? 0),
+                enrolledCount: Number(enrollmentStats?.count ?? 0),
+                teachers,
+                students,
+            },
+        });
     } catch (e) {
         console.error(`GET /departments/:id error: ${e}`);
         res.status(500).json({ error: "Failed to load department" });

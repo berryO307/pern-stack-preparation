@@ -26,6 +26,13 @@ type RefreshButtonProps = {
    * `meta` property is used when creating the URL for the related action and path.
    */
   meta?: Record<string, unknown>;
+  /**
+   * Fires alongside the button's own refresh - for a page with other
+   * queries the bound resource/id doesn't cover (e.g. class detail's own
+   * enrollments roster), so "Refresh" doesn't silently leave stale data on
+   * screen next to freshly-refetched data.
+   */
+  extraOnClick?: () => void;
 } & React.ComponentProps<typeof Button>;
 
 export const RefreshButton = React.forwardRef<
@@ -33,7 +40,7 @@ export const RefreshButton = React.forwardRef<
   RefreshButtonProps
 >(
   (
-    { resource, recordItemId, dataProviderName, meta, children, ...rest },
+    { resource, recordItemId, dataProviderName, meta, extraOnClick, children, ...rest },
     ref
   ) => {
     const {
@@ -57,6 +64,7 @@ export const RefreshButton = React.forwardRef<
             return;
           }
           refresh();
+          extraOnClick?.();
         }}
         {...rest}
         ref={ref}

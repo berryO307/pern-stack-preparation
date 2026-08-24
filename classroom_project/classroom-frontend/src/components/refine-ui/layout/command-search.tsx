@@ -30,12 +30,31 @@ const MIN_QUERY_LENGTH = 2;
 const subjectSearchHref = (name: string) =>
   `/subjects?filters[0][field]=name&filters[0][operator]=contains&filters[0][value]=${encodeURIComponent(name)}`;
 
+// Platform detection has to happen after mount, not during render - doing it
+// during render runs on the server-rendered/first-paint markup too, which
+// doesn't know the visitor's platform, so it would mismatch whatever the
+// client-side pass detects (a hydration warning) rather than just start
+// blank and fill in a moment later.
+const detectModifierLabel = (): string | null => {
+  if (typeof navigator === "undefined") return null;
+  const uaPlatform = (navigator as { userAgentData?: { platform?: string } }).userAgentData?.platform;
+  const platform = uaPlatform ?? navigator.platform ?? "";
+  return /mac/i.test(platform) ? "⌘K" : "Ctrl K";
+};
+
 export const CommandSearch = () => {
   const navigate = useNavigate();
   const { open: sidebarOpen, isMobile } = useSidebar();
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  // Stable placeholder on first paint (both server and client agree on
+  // "nothing rendered yet"), then filled in from an effect once the real
+  // platform is known.
+  const [modifierLabel, setModifierLabel] = useState<string | null>(null);
+  useEffect(() => {
+    setModifierLabel(detectModifierLabel());
+  }, []);
   const debouncedQuery = useDebouncedValue(query, 250);
   const trimmedQuery = debouncedQuery.trim();
   const enabled = trimmedQuery.length >= MIN_QUERY_LENGTH;
@@ -117,9 +136,14 @@ export const CommandSearch = () => {
         {!collapsed && (
           <>
             <span className="flex-1 text-left">Search...</span>
-            <kbd className="pointer-events-none hidden select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground sm:inline-flex">
-              ⌘K
-            </kbd>
+            {modifierLabel && (
+              <kbd
+                aria-hidden="true"
+                className="pointer-events-none hidden select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground sm:inline-flex"
+              >
+                {modifierLabel}
+              </kbd>
+            )}
           </>
         )}
       </Button>

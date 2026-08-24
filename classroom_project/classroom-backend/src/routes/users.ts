@@ -152,9 +152,11 @@ router.get("/:id", requireAuth, workspaceMiddleware, async (req: Request, res: R
             .select({
                 ...getTableColumns(classes),
                 subject: { ...getTableColumns(subjects) },
+                department: { ...getTableColumns(departments) },
             })
             .from(classes)
             .leftJoin(subjects, eq(classes.subjectId, subjects.id))
+            .leftJoin(departments, eq(subjects.departmentId, departments.id))
             .where(sql`${classes.teacherId} = ${userId} AND ${classes.workspaceId} = ${req.workspaceId!}`)
             .orderBy(desc(classes.createdAt));
 

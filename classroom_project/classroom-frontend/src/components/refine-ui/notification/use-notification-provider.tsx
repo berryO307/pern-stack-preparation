@@ -17,7 +17,6 @@ export function useNotificationProvider(): NotificationProvider {
           toast.success(message, {
             id: key,
             description,
-            richColors: true,
           });
           return;
 
@@ -25,7 +24,6 @@ export function useNotificationProvider(): NotificationProvider {
           toast.error(message, {
             id: key,
             description,
-            richColors: true,
           });
           return;
 
