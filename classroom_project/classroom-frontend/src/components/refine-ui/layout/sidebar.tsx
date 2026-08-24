@@ -232,7 +232,8 @@ function SidebarItemLink({ item, selectedKey }: MenuItemProps) {
 
 function SidebarHeader() {
   const { title } = useRefineOptions();
-  const { open, isMobile } = useShadcnSidebar();
+  const { open, isMobile, setOpenMobile } = useShadcnSidebar();
+  const Link = useLink();
 
   return (
     <ShadcnSidebarHeader
@@ -247,7 +248,9 @@ function SidebarHeader() {
         "overflow-hidden"
       )}
     >
-      <div
+      <Link
+        to="/"
+        onClick={() => isMobile && setOpenMobile(false)}
         className={cn(
           "whitespace-nowrap",
           "flex",
@@ -281,7 +284,7 @@ function SidebarHeader() {
         >
           {title.text}
         </h2>
-      </div>
+      </Link>
 
       <ShadcnSidebarTrigger
         className={cn("text-muted-foreground", "mr-1.5", {

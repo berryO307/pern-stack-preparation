@@ -1,6 +1,6 @@
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import type { db as Db } from "../db/index.js";
-import { departments, subjects, classes, enrollments, user } from "../db/schema/index.js";
+import { departments, subjects, classes, enrollments, user, demoWorkspaces } from "../db/schema/index.js";
 import { randomUUID } from "crypto";
 import { faker } from "@faker-js/faker";
 
@@ -439,6 +439,43 @@ async function upsertFixtureUsers(tx: DbOrTx, names: string[], role: "teacher" |
     return names.map((_, i) => idByEmail.get(emails[i]!)!);
 }
 
+// ---- Shared catalog images ---------------------------------------------
+// Subjects/classes are per-workspace rows (not a shared pool like
+// teachers/students), so a real photo uploaded through the admin's own
+// permanent workspace never appeared anywhere else - every other visitor's
+// workspace only ever had the generated colour-block placeholder. That's a
+// visual-only gap, not a data-isolation one: the catalog (subject codes,
+// class names) is the same fixed list in every workspace, so "this subject
+// code already has a real photo somewhere" is a safe, deterministic lookup
+// that never touches another workspace's students/enrollments/classes. Keyed
+// by the admin's OWN permanent workspace specifically (not just "any
+// workspace with an image") so a future admin upload is the one source of
+// truth every new/re-seeded workspace picks up, rather than a race between
+// whichever workspace happened to get an image first.
+type CatalogImages = {
+    subjectImageByCode: Map<string, string>;
+    classBannerByName: Map<string, string>;
+};
+
+async function fetchCatalogImages(tx: DbOrTx): Promise<CatalogImages> {
+    const subjectRows = await tx
+        .select({ code: subjects.code, imageCldPubId: subjects.imageCldPubId })
+        .from(subjects)
+        .innerJoin(demoWorkspaces, eq(subjects.workspaceId, demoWorkspaces.id))
+        .where(and(eq(demoWorkspaces.isPermanent, true), isNotNull(subjects.imageCldPubId)));
+
+    const classRows = await tx
+        .select({ name: classes.name, bannerCldPubId: classes.bannerCldPubId })
+        .from(classes)
+        .innerJoin(demoWorkspaces, eq(classes.workspaceId, demoWorkspaces.id))
+        .where(and(eq(demoWorkspaces.isPermanent, true), isNotNull(classes.bannerCldPubId)));
+
+    return {
+        subjectImageByCode: new Map(subjectRows.map((r) => [r.code, r.imageCldPubId!])),
+        classBannerByName: new Map(classRows.map((r) => [r.name, r.bannerCldPubId!])),
+    };
+}
+
 // ---- Entry point ------------------------------------------------------
 // Builds the entire fixture dataset in memory first (deterministic from
 // `initialSeed`, validated by assertSeedPlanSanity) and only then writes it -
@@ -449,6 +486,7 @@ async function upsertFixtureUsers(tx: DbOrTx, names: string[], role: "teacher" |
 export const seedWorkspace = async (tx: DbOrTx, workspaceId: string, initialSeed: number): Promise<number> => {
     const teacherIds = await upsertFixtureUsers(tx, TEACHER_NAMES, "teacher");
     const studentIds = await upsertFixtureUsers(tx, STUDENT_NAMES, "student");
+    const catalogImages = await fetchCatalogImages(tx);
 
     const MAX_PLAN_ATTEMPTS = 5;
     let plan: SeedPlan | undefined;
@@ -510,6 +548,7 @@ export const seedWorkspace = async (tx: DbOrTx, workspaceId: string, initialSeed
                     description: subject.description,
                     departmentId: deptIds[dept.code]!,
                     origin: "seed",
+                    imageCldPubId: catalogImages.subjectImageByCode.get(subject.code) ?? null,
                     createdAt: isRecent
                         ? pickWeekdayLeaningDate(catalogRecentStart, catalogNow)
                         : pickWeekdayLeaningDate(catalogBackboneStart, catalogBackboneEnd),
@@ -534,6 +573,7 @@ export const seedWorkspace = async (tx: DbOrTx, workspaceId: string, initialSeed
                 inviteCode: cls.inviteCode,
                 schedules: [],
                 origin: "seed",
+                bannerCldPubId: catalogImages.classBannerByName.get(cls.name) ?? null,
                 createdAt: cls.createdAt,
             })
             .returning({ id: classes.id });

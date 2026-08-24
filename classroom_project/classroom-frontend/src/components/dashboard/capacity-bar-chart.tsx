@@ -56,7 +56,12 @@ export function CapacityBarChart({ data, capacityExcluded = 0, isLoading }: Capa
     return BUCKET_ORDER.map((bucket) => {
       const classes = byBucket.get(bucket) ?? 0;
       const pct = totalClasses > 0 ? Math.round((classes / totalClasses) * 100) : 0;
-      return { bucket, label: `${bucket}%`, classes, pct, trailing: `${classes} · ${pct}%` };
+      // Percentage only, not "count · pct%" - the combined string's widest
+      // case ("21 · 100%") could run past the 56px reserved for it, which is
+      // what broke on a phone's narrower card (the label spilling past the
+      // bar/card edge instead of sitting cleanly beside it). The count is
+      // still one tap away via the tooltip and in the sr-only table below.
+      return { bucket, label: `${bucket}%`, classes, pct, trailing: `${pct}%` };
     });
   }, [data, totalClasses]);
 
@@ -113,7 +118,7 @@ export function CapacityBarChart({ data, capacityExcluded = 0, isLoading }: Capa
               <BarChart
                 data={chartData}
                 layout="vertical"
-                margin={{ left: 4, right: 56, top: 4, bottom: 4 }}
+                margin={{ left: 4, right: 40, top: 4, bottom: 4 }}
                 accessibilityLayer
               >
                 <CartesianGrid horizontal={false} strokeDasharray="3 3" />
