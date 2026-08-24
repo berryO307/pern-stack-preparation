@@ -69,7 +69,7 @@ export function CapacityBarChart({ data, capacityExcluded = 0, isLoading }: Capa
     : "No capacity data available";
 
   return (
-    <Card className="shadow-none flex h-full flex-col">
+    <Card className="shadow-none flex h-full min-w-0 flex-col">
       <CardHeader>
         <CardTitle>Capacity distribution</CardTitle>
         <p className="text-sm text-muted-foreground">

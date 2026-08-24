@@ -90,7 +90,7 @@ export function EnrollmentsTrendChart({
     : "No enrollment data available";
 
   return (
-    <Card className="shadow-none flex h-full flex-col">
+    <Card className="shadow-none flex h-full min-w-0 flex-col">
       <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
         <div>
           <CardTitle>Enrollments</CardTitle>
