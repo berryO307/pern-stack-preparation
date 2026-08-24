@@ -17,3 +17,20 @@ export function getInitials(name = "") {
   }
   return initials || "?";
 }
+
+// Single fallback chain for displaying a person's name: their own name, then
+// the local part of their email (an actual GitHub-account-with-no-name is
+// the real case this covers, not a hypothetical - see lib/auth.ts), then a
+// generic "there" so a greeting still reads as a sentence. Every place a
+// person's name renders as text (greeting, sidebar footer, person cells,
+// activity feed) should go through this instead of inlining `name ?? "..."`
+// per call site, so the fallback behavior can't drift between them.
+export function displayName(
+  person?: { name?: string | null; email?: string | null } | null,
+): string {
+  const name = person?.name?.trim();
+  if (name) return name;
+  const emailLocalPart = person?.email?.split("@")[0]?.trim();
+  if (emailLocalPart) return emailLocalPart;
+  return "there";
+}
