@@ -195,29 +195,28 @@ router.post(
                 return res.status(422).json({ errors: { email: "No student found with that email." } });
             }
 
-            // Neon's HTTP driver has no interactive transactions (a session can't hold
-            // a lock across separate round trips), but `db.batch` sends a fixed list
-            // of queries as one atomic Postgres transaction. Locking the class row
-            // with FOR UPDATE first means a concurrent enrollment on the same class
-            // blocks until this one commits, so the capacity check the INSERT's WHERE
-            // clause does can't race against another request's insert. A 0-row
-            // result here (no unique-constraint violation, just nothing to insert)
-            // means capacity was the blocker; a genuine duplicate instead throws
-            // 23505 below, so the two failure modes stay distinguishable. origin is
-            // left off the insert entirely - the column's own 'user' default is
-            // what applies, never anything read from req.body.
-            const [, insertResult] = await db.batch([
-                db.execute(sql`SELECT capacity FROM ${classes} WHERE ${classes.id} = ${classId} FOR UPDATE`),
-                db.execute(sql`
+            // Locking the class row with FOR UPDATE first means a concurrent
+            // enrollment on the same class blocks until this one commits, so the
+            // capacity check the INSERT's WHERE clause does can't race against
+            // another request's insert. A 0-row result here (no unique-constraint
+            // violation, just nothing to insert) means capacity was the blocker; a
+            // genuine duplicate instead throws 23505 below, so the two failure
+            // modes stay distinguishable. origin is left off the insert entirely -
+            // the column's own 'user' default is what applies, never anything read
+            // from req.body. A real interactive transaction (not the neon-http
+            // driver's one-shot db.batch, which this used to need) is what lets
+            // the lock actually hold across both statements.
+            const createdEnrollment = await db.transaction(async (tx) => {
+                await tx.execute(sql`SELECT capacity FROM ${classes} WHERE ${classes.id} = ${classId} FOR UPDATE`);
+                const insertResult = await tx.execute(sql`
                     INSERT INTO ${enrollments} (class_id, student_id, workspace_id)
                     SELECT ${classId}, ${matchedUser.id}, ${req.workspaceId!}
                     WHERE (SELECT count(*) FROM ${enrollments} WHERE class_id = ${classId} AND status = 'active')
                         < (SELECT capacity FROM ${classes} WHERE id = ${classId})
                     RETURNING *
-                `),
-            ]);
-
-            const createdEnrollment = (insertResult as unknown as { rows: (typeof enrollments.$inferSelect)[] }).rows[0];
+                `);
+                return (insertResult as unknown as { rows: (typeof enrollments.$inferSelect)[] }).rows[0];
+            });
 
             if (!createdEnrollment) {
                 return res.status(422).json({ errors: { classId: "This class is full." } });

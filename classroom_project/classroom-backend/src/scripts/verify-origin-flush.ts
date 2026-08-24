@@ -40,7 +40,7 @@ async function main() {
             .returning();
         workspaceId = workspace!.id;
 
-        await seedWorkspace(workspaceId, randomInt(0, 2 ** 31 - 1));
+        await seedWorkspace(db, workspaceId, randomInt(0, 2 ** 31 - 1));
 
         // Simulate real visitor writes via routes/departments.ts and
         // routes/subjects.ts's own value-construction pattern - a malicious

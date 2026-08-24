@@ -25,7 +25,7 @@ async function provisionTestWorkspace(seed: number) {
         .insert(demoWorkspaces)
         .values({ userId: ownerId, isPermanent: false, expiresAt: new Date(Date.now() + 60 * 60 * 1000) })
         .returning();
-    const usedSeed = await seedWorkspace(workspace!.id, seed);
+    const usedSeed = await seedWorkspace(db, workspace!.id, seed);
     return { ownerId, workspaceId: workspace!.id, usedSeed };
 }
 
