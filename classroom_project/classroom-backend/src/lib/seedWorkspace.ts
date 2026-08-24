@@ -1,8 +1,18 @@
 import { inArray } from "drizzle-orm";
-import { db } from "../db/index.js";
+import type { db as Db } from "../db/index.js";
 import { departments, subjects, classes, enrollments, user } from "../db/schema/index.js";
 import { randomUUID } from "crypto";
 import { faker } from "@faker-js/faker";
+
+// The caller (lib/workspace.ts) passes its own open transaction, not the
+// module-level `db` - every insert this file makes has to land inside that
+// SAME transaction, or none of it is actually atomic with the workspace row
+// and the seededAt marker. A transaction object doesn't structurally match
+// `typeof db` exactly (it lacks the pool-only `$client` property), so this
+// is a union of both - a script calling seedWorkspace directly against the
+// top-level `db` (outside any transaction, e.g. a one-off repair) and
+// lib/workspace.ts's `tx` both need to pass here interchangeably.
+type DbOrTx = typeof Db | Parameters<Parameters<typeof Db.transaction>[0]>[0];
 
 // ---- Global, workspace-agnostic fixture identities -------------------------
 // Teachers/students are a shared pool reused across every workspace (matched by
@@ -387,14 +397,14 @@ const generateSeedPlan = (seed: number): SeedPlan => {
 };
 
 // ---- Fixture user upsert ---------------------------------------------------
-async function upsertFixtureUsers(names: string[], role: "teacher" | "student"): Promise<string[]> {
+async function upsertFixtureUsers(tx: DbOrTx, names: string[], role: "teacher" | "student"): Promise<string[]> {
     const emails = names.map(fixtureEmail);
 
     // One round trip to see what already exists, one bulk insert for what's
     // missing, one final round trip to read back authoritative ids - not N
     // round trips for N pool members, which matters now that the pool is this
     // large (every first-time visitor's sign-in pays this cost).
-    const existing = await db.select({ id: user.id, email: user.email }).from(user).where(inArray(user.email, emails));
+    const existing = await tx.select({ id: user.id, email: user.email }).from(user).where(inArray(user.email, emails));
     const idByEmail = new Map(existing.map((row) => [row.email, row.id]));
 
     const missing = names
@@ -402,7 +412,7 @@ async function upsertFixtureUsers(names: string[], role: "teacher" | "student"):
         .filter((row) => !idByEmail.has(row.email));
 
     if (missing.length > 0) {
-        await db
+        await tx
             .insert(user)
             .values(
                 missing.map((row) => ({
@@ -419,7 +429,7 @@ async function upsertFixtureUsers(names: string[], role: "teacher" | "student"):
         // A concurrent provision may have won the race on some emails since
         // the SELECT above - re-resolve from the DB rather than trusting the
         // locally-generated ids for anything that actually conflicted.
-        const resolved = await db
+        const resolved = await tx
             .select({ id: user.id, email: user.email })
             .from(user)
             .where(inArray(user.email, missing.map((r) => r.email)));
@@ -436,9 +446,9 @@ async function upsertFixtureUsers(names: string[], role: "teacher" | "student"):
 // and a retry just tries a new seed rather than needing to undo DB writes.
 // Returns the seed actually used (may differ from initialSeed after a retry)
 // so the caller can persist and log the one that reproduces this exact data.
-export const seedWorkspace = async (workspaceId: string, initialSeed: number): Promise<number> => {
-    const teacherIds = await upsertFixtureUsers(TEACHER_NAMES, "teacher");
-    const studentIds = await upsertFixtureUsers(STUDENT_NAMES, "student");
+export const seedWorkspace = async (tx: DbOrTx, workspaceId: string, initialSeed: number): Promise<number> => {
+    const teacherIds = await upsertFixtureUsers(tx, TEACHER_NAMES, "teacher");
+    const studentIds = await upsertFixtureUsers(tx, STUDENT_NAMES, "student");
 
     const MAX_PLAN_ATTEMPTS = 5;
     let plan: SeedPlan | undefined;
@@ -468,7 +478,7 @@ export const seedWorkspace = async (workspaceId: string, initialSeed: number): P
 
     const deptIds: Record<string, number> = {};
     for (const dept of DEPARTMENT_CATALOG) {
-        const [created] = await db
+        const [created] = await tx
             .insert(departments)
             .values({
                 workspaceId,
@@ -491,7 +501,7 @@ export const seedWorkspace = async (workspaceId: string, initialSeed: number): P
         for (const subject of dept.subjects) {
             const isRecent = recentSubjectCount < 2 && faker.number.float({ min: 0, max: 1 }) < 0.12;
             if (isRecent) recentSubjectCount++;
-            const [created] = await db
+            const [created] = await tx
                 .insert(subjects)
                 .values({
                     workspaceId,
@@ -511,7 +521,7 @@ export const seedWorkspace = async (workspaceId: string, initialSeed: number): P
 
     const classIds: number[] = [];
     for (const cls of plan.classesPlan) {
-        const [created] = await db
+        const [created] = await tx
             .insert(classes)
             .values({
                 workspaceId,
@@ -530,15 +540,24 @@ export const seedWorkspace = async (workspaceId: string, initialSeed: number): P
         classIds.push(created!.id);
     }
 
-    for (const e of plan.enrollmentsPlan) {
-        await db.insert(enrollments).values({
-            workspaceId,
-            classId: classIds[e.classIndex]!,
-            studentId: studentIds[e.studentIndex]!,
-            status: e.status,
-            createdAt: e.createdAt,
-            origin: "seed",
-        });
+    // One row per round trip here used to mean ~900 sequential awaits for a
+    // typical workspace - fine individually, but the dominant cost of the
+    // whole provision and the main reason C1's transaction needed to worry
+    // about duration/timeout at all. Chunked multi-row INSERTs cut that to a
+    // handful of round trips; the chunk size is just a sane batch bound, not
+    // load-bearing for correctness (still inside the same transaction either
+    // way).
+    const ENROLLMENT_INSERT_CHUNK_SIZE = 200;
+    const enrollmentRows = plan.enrollmentsPlan.map((e) => ({
+        workspaceId,
+        classId: classIds[e.classIndex]!,
+        studentId: studentIds[e.studentIndex]!,
+        status: e.status,
+        createdAt: e.createdAt,
+        origin: "seed" as const,
+    }));
+    for (let i = 0; i < enrollmentRows.length; i += ENROLLMENT_INSERT_CHUNK_SIZE) {
+        await tx.insert(enrollments).values(enrollmentRows.slice(i, i + ENROLLMENT_INSERT_CHUNK_SIZE));
     }
 
     return plan.seed;

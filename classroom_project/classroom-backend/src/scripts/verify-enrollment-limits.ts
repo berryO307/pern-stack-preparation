@@ -53,7 +53,7 @@ async function main() {
             .values({ userId: ownerId, isPermanent: false, expiresAt: new Date(Date.now() + 60 * 60 * 1000) })
             .returning();
         workspaceId = workspace!.id;
-        await seedWorkspace(workspaceId, randomInt(0, 2 ** 31 - 1));
+        await seedWorkspace(db, workspaceId, randomInt(0, 2 ** 31 - 1));
 
         const classRows = await db.select().from(classes).where(eq(classes.workspaceId, workspaceId));
         const activeCountByClass = new Map<number, number>();
@@ -122,19 +122,19 @@ async function main() {
         }
 
         // --- Duplicate-enrollment race: two concurrent inserts for the same
-        // student+class, mirroring routes/enrollments.ts's db.batch pattern ---
+        // student+class, mirroring routes/enrollments.ts's transaction pattern ---
         const raceStudentId = raceStudentCandidate.id; // not yet enrolled in raceClass
         const attempt = () =>
-            db.batch([
-                db.execute(sql`SELECT capacity FROM ${classes} WHERE ${classes.id} = ${raceClass.id} FOR UPDATE`),
-                db.execute(sql`
+            db.transaction(async (tx) => {
+                await tx.execute(sql`SELECT capacity FROM ${classes} WHERE ${classes.id} = ${raceClass.id} FOR UPDATE`);
+                return tx.execute(sql`
                     INSERT INTO ${enrollments} (class_id, student_id, workspace_id)
                     SELECT ${raceClass.id}, ${raceStudentId}, ${workspaceId}
                     WHERE (SELECT count(*) FROM ${enrollments} WHERE class_id = ${raceClass.id} AND status = 'active')
                         < (SELECT capacity FROM ${classes} WHERE id = ${raceClass.id})
                     RETURNING *
-                `),
-            ]);
+                `);
+            });
 
         const [resultA, resultB] = await Promise.allSettled([attempt(), attempt()]);
         const pgErrorCode = (e: any): string | undefined => e?.code ?? e?.cause?.code;

@@ -42,7 +42,7 @@ async function main() {
             .values({ userId: id, isPermanent: false, expiresAt: new Date(Date.now() + 60 * 60 * 1000) })
             .returning();
 
-        await seedWorkspace(workspace!.id, randomInt(0, 2 ** 31 - 1));
+        await seedWorkspace(db, workspace!.id, randomInt(0, 2 ** 31 - 1));
 
         const count = await fixtureCount();
         countsAfterEach.push(count);

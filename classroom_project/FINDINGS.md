@@ -122,3 +122,53 @@ rows with empty (not null) name/email: []
 - **`VITE_BACKEND_BASE_URL` on Vercel.** Needs changing from the full Railway URL to `/api/` so the data provider's requests also go through the same-origin proxy (not just auth) — a dashboard env var, not a code change.
 - **In-app-browser banner (Part D3).** Not built. Flagged as a real remaining gap for anyone tapping the link from inside LinkedIn/WhatsApp/Instagram, not attempted in this pass given the size of everything else in scope.
 - **E4 (refresh name/avatar on every sign-in).** Better Auth's own linking code only refreshes profile fields when a *new* provider link is created (`applyUpdateUserInfoOnLink`, gated by `updateUserInfoOnLink`), not on a routine repeat sign-in with an already-linked provider — confirmed by reading `oauth2/link-account.mjs`. No documented hook covers "every sign-in, same provider" in this Better Auth version without patching internals, which felt too risky to ship blind. Left as a known, documented gap rather than a fragile guess.
+
+## Demo workspace provisioning integrity
+
+Investigated 2026-08-24, triggered by a brief hypothesizing (H1) that a truncated/partial seed run leaves some users with materially smaller datasets, evidenced by a claimed 228-vs-140-student gap and "-0%" KPI deltas, and (H2) that role-based read filtering hides data/images from non-admin users. Every number below is real script/query output against the live database.
+
+### H1 and H2: could not be reproduced against live data
+
+- **The 228-student figure belongs to the admin's `isPermanent` workspace**, which was manually augmented earlier this session (extra Environmental Science subjects/classes added by hand, see the KPI-bug investigation above). Comparing it to a freshly-seeded workspace is comparing a hand-edited fixture to a stock one, not evidence of a truncated seed. All 3 real non-admin workspaces present in the live DB are mutually consistent: 140 students / 13 teachers / 21 subjects / 16 classes each.
+- **All four KPI `previous`-period values were queried directly and are non-zero** for every live workspace, directly contradicting the brief's claimed "-0%" deltas.
+- **Grepped every backend route handler for role-based read-filtering predicates: zero matches.** The one `isAdmin`-gated query found (frontend) is scoped to an unrelated, correctly-gated feature and does not touch classes/subjects/images.
+- Conclusion documented honestly: neither hypothesis reproduces against current live data. The defensive fixes below were still implemented because the underlying architectural risk (a non-atomic, non-idempotent, unrate-limited provisioning path) is real and independently confirmed — see C1 below — regardless of whether it has caused visible damage yet.
+
+### C1 — non-atomic provisioning: confirmed via a real forced-failure test
+
+`lib/workspace.ts`'s `provisionWorkspace` previously ran the workspace-row insert, `seedWorkspace()` (many individually-committing inserts), and the final `seededAt` update as three separate, non-transactional steps. Nothing ever retried a partial result — `resolveWorkspace` treated any existing non-expired row as valid regardless of `seededAt`.
+
+Proved this was a real gap, not a theoretical one, with a deliberate forced-failure test against the live database: a `Proxy`-wrapped transaction client throwing on the 3rd class insert during a real `provisionWorkspace` call. Result: zero rows survived — the department/subject rows inserted before the throw were rolled back along with everything after it, confirming the fix (wrapping the whole flow in one `db.transaction`) actually provides atomicity rather than just looking like it does on the happy path.
+
+This required switching the DB driver: `drizzle-orm/neon-http` (the original driver) throws `"No transactions support in neon-http driver"` on any `db.transaction()` call — confirmed by reading the installed package's own `dist/neon-http/session.js` before attempting to build on top of it. Switched to `drizzle-orm/neon-serverless` + `@neondatabase/serverless`'s WebSocket `Pool` (new `ws` dependency), which does support real interactive transactions. Railway runs this backend as a long-lived process, so there's no serverless cold-start tradeoff to weigh against this.
+
+### C2/D3 — idempotency and self-healing
+
+`resolveWorkspace` now treats a workspace with `seededAt === null` (an incomplete row, the exact shape a pre-C1 crash could have left behind) the same as an expired one: delete and re-provision, transparently, on the very next request that touches it. Combined with C1's atomicity, a `demo_workspaces` row can now only ever be in one of two states — fully seeded, or not existing — with no reachable in-between state to get stuck in.
+
+### C4 — provisioning rate limit reworked
+
+Idempotency is now the real defense against repeated `POST /workspace` calls (a workspace either fully exists or it doesn't, so calling it any number of times is safe), so the token-bucket rate limit (`middleware/workspaceProvisionRateLimit.ts`) was raised from 3/hour to 10/hour and converted from blanket middleware to a plain function the route only calls when a provision is actually about to happen (`hasValidWorkspace()` is checked first) — a legitimate user with a handful of tabs/reconnects landing right at expiry can no longer lock themselves out of their own already-provisioned workspace.
+
+Verified directly against the live Arcjet client with `NODE_ENV=production` (Arcjet runs in `DRY_RUN` mode otherwise, by existing documented design — see `config/arcjet.ts` — so this can only be genuinely exercised with production mode forced for the test run): 10 requests succeed, the 11th is denied with `429`, exactly matching the new `capacity: 10` config.
+
+**Found and ruled out of scope: a pre-existing, unrelated off-by-one in the separate Tier 1 (auth-route) rate limit test**, `testAuthRateLimit()` in `verify-arcjet-tiers.ts` — code untouched by this investigation. Under the same forced `NODE_ENV=production` run, it denies at request #12 where the test asserts #11. Documented here rather than silently fixed or silently ignored; it predates this investigation and is out of scope for it.
+
+### D1/D2 — invariant checks and a health endpoint
+
+Added `checkWorkspaceInvariants(workspaceId)`, checking: seeded, each domain table non-empty with no future-dated rows, all 5 capacity-distribution buckets populated, all 12 trailing months represented in enrollments, the 4 KPI counts pairwise distinct, and (a system-wide check) no orphaned `workspace_id`-null rows in any of the 4 domain tables. Exposed as `GET /workspace/health` (self-service — "my numbers look different from yours" now has a request either person can run instead of comparing screenshots).
+
+### D4 — backfill run against live data
+
+`backfill-workspace-invariants.ts` runs the invariant check against every existing workspace and re-provisions any that fail. Run dry-run-only first, deliberately, specifically to confirm it wouldn't misjudge the admin's manually-augmented permanent workspace as "broken" and destructively wipe real curated demo data — it passed every invariant, confirming the check itself was safe before allowing it to run for real. Real run result: `Healthy: 4. Repaired: 0. Unrepairable: 0.` — no live workspace was actually broken at the time of this investigation, consistent with the H1/H2 non-reproduction above.
+
+### A hygiene finding, not a bug
+
+The live `user` table has 282 student-role and 26 teacher-role rows — both above the current fixture-pool constants (`STUDENT_POOL_SIZE=140`, `TEACHER_POOL_SIZE=13`). `upsertFixtureUsers` only ever upserts by email and never prunes, so rows from a historically larger pool size are still sitting in the table. Harmless (nothing reads count-of-all-fixture-users as a metric), but noted here since it looked alarming without this explanation.
+
+### What this pass did not do
+
+- **A dedicated "10 concurrent provisioning requests → exactly one workspace" load test.** Only a mid-seed forced-failure test and a normal-completion path were exercised; a true concurrency test (parallel requests racing the unique index on `demo_workspaces.userId`) was not run.
+- **C3's fuller form — moving the provisioning trigger server-side into the Better Auth sign-in callback.** Only the lighter client-side single-flight guard (`use-workspace.ts`: `staleTime: Infinity` + disabled refetch triggers, so a normal page doesn't fire redundant `POST /workspace` calls) was implemented, not the architectural move of the trigger itself.
+- **E4 (a demo-access chip / read-only-mode indicator in the UI).** Not built — deprioritized since neither H1 nor H2 reproduced, so there's no confirmed underlying access-model bug this UI would be surfacing.
+- **Part F (Site24x7 RUM custom timing/error events for provisioning).** Not built, same reasoning as E4.

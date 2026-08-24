@@ -3,19 +3,33 @@ import { eq } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { demoWorkspaces } from "../db/schema/index.js";
 import { requireAuth } from "../middleware/authorize.js";
-import { resolveWorkspace } from "../lib/workspace.js";
+import { resolveWorkspace, hasValidWorkspace, checkWorkspaceInvariants, isWorkspaceHealthy } from "../lib/workspace.js";
 import { flushVisitorRows } from "../lib/cleanup.js";
-import workspaceProvisionRateLimit from "../middleware/workspaceProvisionRateLimit.js";
+import { checkProvisionRateLimit, applyProvisionRateLimit } from "../middleware/workspaceProvisionRateLimit.js";
+import workspaceMiddleware from "../middleware/workspace.js";
 
 const router = express.Router();
 
 // Idempotent: returns the caller's existing workspace if it's still valid,
-// otherwise provisions (and seeds) a fresh one. Safe to call on every login -
-// the frontend uses this right after sign-in to get expiresAt up front rather
-// than waiting on the first workspace-scoped data request to trigger it lazily.
-router.post("/workspace", requireAuth, workspaceProvisionRateLimit, async (req, res) => {
+// otherwise provisions (and seeds) a fresh one. Safe to call on every login,
+// on every tab, any number of times - the frontend uses this right after
+// sign-in to get expiresAt up front rather than waiting on the first
+// workspace-scoped data request to trigger it lazily.
+//
+// The rate limit only applies when this call is actually about to provision
+// (hasValidWorkspace is false) - a plain "give me my existing workspace"
+// call never spends budget, so a legitimate user can't be locked out of
+// their own already-provisioned workspace by a handful of calls.
+router.post("/workspace", requireAuth, async (req, res) => {
     try {
-        const workspace = await resolveWorkspace(req.user!.id, req.user!.role === "admin");
+        const userId = req.user!.id;
+
+        if (!(await hasValidWorkspace(userId))) {
+            const rateLimitResult = await checkProvisionRateLimit(req, userId);
+            if (!applyProvisionRateLimit(res, rateLimitResult)) return;
+        }
+
+        const workspace = await resolveWorkspace(userId, req.user!.role === "admin");
 
         res.status(200).json({
             data: {
@@ -56,6 +70,28 @@ router.post("/workspace/flush-visitor-data", requireAuth, async (req, res) => {
     } catch (e) {
         console.error("POST /demo/workspace/flush-visitor-data error", e);
         res.status(500).json({ error: "Failed to flush workspace data" });
+    }
+});
+
+// D2: per-invariant pass/fail for the caller's OWN workspace only -
+// workspaceMiddleware resolves req.workspaceId the same way every other
+// route does (and, as a side effect, transparently re-provisions it first
+// if it's incomplete or expired - D3's self-healing). Two people comparing
+// screenshots isn't a diagnostic procedure; this turns "my numbers look
+// different from yours" into one request either of them can run.
+router.get("/workspace/health", requireAuth, workspaceMiddleware, async (req, res) => {
+    try {
+        const checks = await checkWorkspaceInvariants(req.workspaceId!);
+        res.status(200).json({
+            data: {
+                workspaceId: req.workspaceId,
+                healthy: isWorkspaceHealthy(checks),
+                checks,
+            },
+        });
+    } catch (e) {
+        console.error("GET /demo/workspace/health error", e);
+        res.status(500).json({ error: "Failed to check workspace health" });
     }
 });
 

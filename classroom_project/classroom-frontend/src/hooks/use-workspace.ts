@@ -8,15 +8,26 @@ export type Workspace = {
   wasJustProvisioned: boolean;
 };
 
-// POST /api/demo/workspace is idempotent - returns the caller's existing
-// workspace if it's still valid, or provisions a fresh one. Calling it here
-// (fired once per authenticated page load) gets expiresAt up front for the
-// countdown banner, rather than waiting on the first domain data fetch to
-// trigger provisioning lazily with no expiresAt to show.
+// POST /api/demo/workspace is idempotent server-side - a repeat call is
+// always safe - but there's no reason for the client to make repeat calls
+// in the first place. staleTime: Infinity plus disabling the standard
+// refetch-on-mount/focus/reconnect triggers means React Query treats the
+// first successful response as good until something in this app EXPLICITLY
+// asks for a fresh one (WorkspaceBanner's own refetch() when the countdown
+// hits zero) - a second mount of this hook, a StrictMode double-invoke, or
+// a tab regaining focus reuses the cached result instead of re-POSTing.
+// This is the single-flight guard: not a manual lock, just telling React
+// Query there's nothing to refetch until told otherwise.
 export function useWorkspace() {
   const { query } = useCustom<Workspace, HttpError>({
     url: `${BACKEND_BASE_URL}demo/workspace`,
     method: "post",
+    queryOptions: {
+      staleTime: Infinity,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+    },
   });
 
   return query;
