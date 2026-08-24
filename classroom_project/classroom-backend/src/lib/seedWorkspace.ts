@@ -356,6 +356,30 @@ const generateSeedPlan = (seed: number): SeedPlan => {
         }
     }
 
+    // Guarantee at least one class - and, by preferring a single-class
+    // teacher's class specifically, at least one genuinely *new* faculty
+    // member too - lands in the current calendar month. "isRecent" above
+    // only makes this likely: its 50-day window can miss the current month
+    // entirely (e.g. early in the month, most of that window is still last
+    // month), which is exactly what left the Classes/Faculty KPI cards
+    // showing a flat 0% delta on some workspaces. Mirrors the enrollment
+    // month-coverage top-up below: don't trust the probability, guarantee
+    // the outcome, same as that pass already does for month coverage.
+    const currentMonthWindow = monthWindows[0]!;
+    const teacherClassCounts = new Map<number, number>();
+    for (const cls of classesPlan) {
+        teacherClassCounts.set(cls.teacherIndex, (teacherClassCounts.get(cls.teacherIndex) ?? 0) + 1);
+    }
+    const singleClassTeacherHasRecentClass = () =>
+        classesPlan.some(
+            (c) => c.createdAt >= currentMonthWindow.start && teacherClassCounts.get(c.teacherIndex) === 1
+        );
+    if (!singleClassTeacherHasRecentClass()) {
+        const singleClassOwner = classesPlan.find((c) => teacherClassCounts.get(c.teacherIndex) === 1);
+        const target = singleClassOwner ?? classesPlan[classesPlan.length - 1];
+        if (target) target.createdAt = pickWeekdayLeaningDate(currentMonthWindow.start, now);
+    }
+
     const monthCoverage = new Set<number>();
     const enrollmentsPlan: PlanEnrollment[] = [];
 
@@ -380,6 +404,48 @@ const generateSeedPlan = (seed: number): SeedPlan => {
             enrollmentsPlan.push({ classIndex, studentIndex, status, createdAt });
         });
     });
+
+    // Guarantee at least one student's EARLIEST enrollment lands in the
+    // current month too. The ~140-person fixture pool is small relative to
+    // the thousands of enrollment rows spread across 12 months of backdated
+    // history, so in practice that history alone routinely already touches
+    // every pool member at least once - which saturates the students KPI's
+    // previous-period count at the same value as the total and leaves
+    // nothing for the current month to add (a flat 0% delta, same root
+    // cause as the classes/faculty gap above, just via saturation instead
+    // of a missed random window). Move whichever student currently has the
+    // fewest enrollment rows - least disruptive to relocate - entirely into
+    // the current month if nobody would otherwise be "new" this month.
+    //
+    // Done before the month-coverage top-up below (not after), and
+    // monthCoverage is rebuilt from scratch afterward: if this student
+    // happened to be the sole coverage for some month, that top-up pass is
+    // what catches and repairs it, rather than this leaving a silent gap
+    // behind stale bookkeeping.
+    const earliestByStudent = new Map<number, number>();
+    const enrollmentCountByStudent = new Map<number, number>();
+    for (const e of enrollmentsPlan) {
+        const t = e.createdAt.getTime();
+        const earliest = earliestByStudent.get(e.studentIndex);
+        if (earliest === undefined || t < earliest) earliestByStudent.set(e.studentIndex, t);
+        enrollmentCountByStudent.set(e.studentIndex, (enrollmentCountByStudent.get(e.studentIndex) ?? 0) + 1);
+    }
+    const hasNewStudentThisMonth = [...earliestByStudent.values()].some(
+        (t) => t >= currentMonthWindow.start.getTime()
+    );
+    if (!hasNewStudentThisMonth && enrollmentCountByStudent.size > 0) {
+        const [targetStudent] = [...enrollmentCountByStudent.entries()].sort((a, b) => a[1] - b[1])[0]!;
+        for (const e of enrollmentsPlan) {
+            if (e.studentIndex === targetStudent) {
+                e.createdAt = pickWeekdayLeaningDate(currentMonthWindow.start, now);
+            }
+        }
+        monthCoverage.clear();
+        for (const e of enrollmentsPlan) {
+            const idx = monthWindows.findIndex((w) => e.createdAt >= w.start && e.createdAt <= w.end);
+            if (idx >= 0) monthCoverage.add(idx);
+        }
+    }
 
     // The weighted pick above makes full 12-month coverage likely but not
     // provable - top up any gap deterministically instead of trusting luck.
@@ -533,29 +599,46 @@ export const seedWorkspace = async (tx: DbOrTx, workspaceId: string, initialSeed
     // A couple of subjects land recently rather than 100% backbone, so the
     // subjects KPI card also gets a real (non-zero) previous-period count -
     // otherwise it's stuck null like classes/faculty were before this fix.
+    // Built as an in-memory plan first, same reason as the classes/faculty
+    // guarantee above: landing somewhere in the last 50 days is likely to
+    // fall in the current calendar month, not certain to - early in a
+    // month, most of that window is still last month. Guaranteed below
+    // instead of left to chance.
     let recentSubjectCount = 0;
-    const subjectIds: Record<string, number> = {};
+    const subjectsPlan: { dept: DepartmentDef; subject: SubjectDef; createdAt: Date }[] = [];
     for (const dept of DEPARTMENT_CATALOG) {
         for (const subject of dept.subjects) {
             const isRecent = recentSubjectCount < 2 && faker.number.float({ min: 0, max: 1 }) < 0.12;
             if (isRecent) recentSubjectCount++;
-            const [created] = await tx
-                .insert(subjects)
-                .values({
-                    workspaceId,
-                    code: subject.code,
-                    name: subject.name,
-                    description: subject.description,
-                    departmentId: deptIds[dept.code]!,
-                    origin: "seed",
-                    imageCldPubId: catalogImages.subjectImageByCode.get(subject.code) ?? null,
-                    createdAt: isRecent
-                        ? pickWeekdayLeaningDate(catalogRecentStart, catalogNow)
-                        : pickWeekdayLeaningDate(catalogBackboneStart, catalogBackboneEnd),
-                })
-                .returning({ id: subjects.id });
-            subjectIds[subject.code] = created!.id;
+            const createdAt = isRecent
+                ? pickWeekdayLeaningDate(catalogRecentStart, catalogNow)
+                : pickWeekdayLeaningDate(catalogBackboneStart, catalogBackboneEnd);
+            subjectsPlan.push({ dept, subject, createdAt });
         }
+    }
+    const currentCatalogMonth = catalogWindows[0]!;
+    const hasSubjectThisMonth = subjectsPlan.some((s) => s.createdAt >= currentCatalogMonth.start);
+    if (!hasSubjectThisMonth) {
+        const target = subjectsPlan[subjectsPlan.length - 1];
+        if (target) target.createdAt = pickWeekdayLeaningDate(currentCatalogMonth.start, catalogNow);
+    }
+
+    const subjectIds: Record<string, number> = {};
+    for (const { dept, subject, createdAt } of subjectsPlan) {
+        const [created] = await tx
+            .insert(subjects)
+            .values({
+                workspaceId,
+                code: subject.code,
+                name: subject.name,
+                description: subject.description,
+                departmentId: deptIds[dept.code]!,
+                origin: "seed",
+                imageCldPubId: catalogImages.subjectImageByCode.get(subject.code) ?? null,
+                createdAt,
+            })
+            .returning({ id: subjects.id });
+        subjectIds[subject.code] = created!.id;
     }
 
     const classIds: number[] = [];
